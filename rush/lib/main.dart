@@ -1,122 +1,344 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'services/database_service.dart';
+import 'services/location_service.dart';
+import 'services/gamification_service.dart';
+import 'screens/dashboard_screen.dart';
+import 'screens/leaderboard_screen.dart';
+import 'screens/history_screen.dart';
+import 'screens/map_screen.dart';
+import 'utils/constants.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize database
+  await DatabaseService.init();
+
+  runApp(const RushApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class RushApp extends StatelessWidget {
+  const RushApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LocationService()),
+        ChangeNotifierProvider(create: (_) => GamificationService()..init()),
+      ],
+      child: MaterialApp(
+        title: AppConstants.appName,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        home: const AppInitializer(),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class AppInitializer extends StatefulWidget {
+  const AppInitializer({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AppInitializer> createState() => _AppInitializerState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _AppInitializerState extends State<AppInitializer> {
+  bool _isLoading = true;
+  bool _initialized = false;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      _initializeApp();
+    }
+  }
+
+  Future<void> _initializeApp() async {
+    final gamification = context.read<GamificationService>();
+
+    // Wait a bit for services to initialize
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Check if user exists
+    if (gamification.user == null) {
+      // Show onboarding/registration
+      if (mounted) {
+        final name = await _showNameDialog();
+        if (name != null && name.isNotEmpty) {
+          await gamification.ensureUser(name);
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<String?> _showNameDialog() async {
+    final controller = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Column(
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withAlpha(26),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.directions_run,
+                size: 48,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Bienvenido a RUSH!',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Run. Unlock. Share. Hustle.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Tu nombre',
+                labelStyle: const TextStyle(color: AppColors.textSecondary),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.primary),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                if (controller.text.trim().isNotEmpty) {
+                  Navigator.pop(context, controller.text.trim());
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'COMENZAR',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(26),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.directions_run,
+                  size: 64,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'RUSH',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Run. Unlock. Share. Hustle.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 32),
+              const CircularProgressIndicator(color: AppColors.primary),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return const MainNavigation();
+  }
+}
+
+class MainNavigation extends StatefulWidget {
+  const MainNavigation({super.key});
+
+  @override
+  State<MainNavigation> createState() => _MainNavigationState();
+}
+
+class _MainNavigationState extends State<MainNavigation> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = const [
+    DashboardScreen(),
+    HistoryScreen(),
+    LeaderboardScreen(), // Social/Leaderboard
+    MapScreen(), // Map exploration
+  ];
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+      backgroundColor: AppColors.background,
+      body: IndexedStack(index: _currentIndex, children: _screens),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.navBackground,
+            borderRadius: BorderRadius.circular(50),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(40),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(
+                    index: 0,
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home,
+                    label: 'Actividad',
+                  ),
+                  _buildNavItem(
+                    index: 1,
+                    icon: Icons.history_outlined,
+                    activeIcon: Icons.history,
+                    label: 'Historial',
+                  ),
+                  _buildNavItem(
+                    index: 2,
+                    icon: Icons.people_outline,
+                    activeIcon: Icons.people,
+                    label: 'Social',
+                  ),
+                  _buildNavItem(
+                    index: 3,
+                    icon: Icons.map_outlined,
+                    activeIcon: Icons.map,
+                    label: 'Mapa',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+    );
+  }
+
+  Widget _buildNavItem({
+    required int index,
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+  }) {
+    final isSelected = _currentIndex == index;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _currentIndex = index;
+        });
+      },
+      child: SizedBox(
+        width: 70,
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
+          children: [
+            Icon(
+              isSelected ? activeIcon : icon,
+              color: isSelected
+                  ? AppColors.navSelected
+                  : AppColors.navUnselected,
+              size: 26,
+            ),
+            const SizedBox(height: 4),
             Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: isSelected
+                    ? AppColors.navSelected
+                    : AppColors.navUnselected,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
