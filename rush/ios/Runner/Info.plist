@@ -45,5 +45,13 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>RUSH necesita acceso a tu ubicación para rastrear tus carreras y desbloquear puntos de interés en el campus.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>RUSH necesita acceso a tu ubicación para rastrear tus carreras incluso cuando la app está en segundo plano.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 </dict>
 </plist>

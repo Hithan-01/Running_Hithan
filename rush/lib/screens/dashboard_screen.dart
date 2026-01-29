@@ -105,8 +105,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Center badges (XP, Rank, Streak)
           Row(
             children: [
-              _buildHeaderBadge(
-                icon: Icons.star_rounded,
+              _buildXpBadge(
                 value: '${gamification.xp}',
                 color: AppColors.secondary,
               ),
@@ -114,7 +113,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _buildHeaderBadge(
                 icon: Icons.leaderboard_rounded,
                 value: '${gamification.level}th',
-                color: AppColors.success,
+                color: _getRankColor(gamification.level),
               ),
               const SizedBox(width: 8),
               _buildHeaderBadge(
@@ -186,6 +185,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildXpBadge({required String value, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.textMuted.withAlpha(40), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'XP',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getRankColor(int rank) {
+    if (rank == 1) {
+      return const Color(0xFFFFD700); // Gold
+    } else if (rank == 2) {
+      return const Color(0xFFC0C0C0); // Silver
+    } else if (rank == 3) {
+      return const Color(0xFFCD7F32); // Bronze
+    } else {
+      return AppColors.textSecondary;
+    }
   }
 
   Widget _buildStartButton(BuildContext context) {

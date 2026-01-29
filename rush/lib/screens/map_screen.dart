@@ -50,8 +50,7 @@ class _MapScreenState extends State<MapScreen> {
               if (location.isTracking) _buildStatsOverlay(location),
 
               // POI info card
-              if (_selectedPoi != null)
-                _buildPoiInfoOverlay(gamification),
+              if (_selectedPoi != null) _buildPoiInfoOverlay(gamification),
 
               // Bottom controls
               _buildBottomControls(location, gamification),
@@ -66,7 +65,10 @@ class _MapScreenState extends State<MapScreen> {
     final currentPos = location.currentPosition;
     final initialPos = currentPos != null
         ? LatLng(currentPos.latitude, currentPos.longitude)
-        : const LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
+        : const LatLng(
+            AppConstants.defaultLatitude,
+            AppConstants.defaultLongitude,
+          );
 
     return GoogleMap(
       initialCameraPosition: CameraPosition(
@@ -117,9 +119,7 @@ class _MapScreenState extends State<MapScreen> {
           markerId: MarkerId(poi.id),
           position: LatLng(poi.latitude, poi.longitude),
           icon: BitmapDescriptor.defaultMarkerWithHue(
-            isVisited
-                ? BitmapDescriptor.hueGreen
-                : BitmapDescriptor.hueViolet,
+            isVisited ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueViolet,
           ),
           onTap: () {
             setState(() {
@@ -158,26 +158,8 @@ class _MapScreenState extends State<MapScreen> {
       left: 16,
       right: 16,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // Back button
-          if (!location.isTracking)
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(
-                  Icons.arrow_back,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ),
-
-          const Spacer(),
-
           // Center on location button
           Container(
             decoration: BoxDecoration(
@@ -186,10 +168,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             child: IconButton(
               onPressed: _centerOnLocation,
-              icon: const Icon(
-                Icons.my_location,
-                color: AppColors.textPrimary,
-              ),
+              icon: const Icon(Icons.my_location, color: AppColors.textPrimary),
             ),
           ),
         ],
@@ -280,10 +259,7 @@ class _MapScreenState extends State<MapScreen> {
         const SizedBox(height: 8),
         const Text(
           'Visita POIs en el campus para ganar XP extra',
-          style: TextStyle(
-            fontSize: 14,
-            color: AppColors.textSecondary,
-          ),
+          style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 20),
         SizedBox(
@@ -393,24 +369,14 @@ class _MapScreenState extends State<MapScreen> {
           child: Container(
             width: size,
             height: size,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: isLarge ? 36 : 28,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: Icon(icon, color: Colors.white, size: isLarge ? 36 : 28),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 12,
-          ),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
       ],
     );
@@ -434,9 +400,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
             child: const Text('Guardar'),
           ),
         ],
@@ -460,7 +424,6 @@ class _MapScreenState extends State<MapScreen> {
             backgroundColor: AppColors.warning,
           ),
         );
-        Navigator.pop(context);
       }
       return;
     }

@@ -39,6 +39,7 @@ class CircularStepGauge extends StatelessWidget {
               painter: _StepGaugePainter(
                 stepsProgress: stepsProgress,
                 xpProgress: xpProgress,
+                currentXP: currentXP,
                 backgroundColor: AppColors.stepsGaugeBackground,
                 stepsProgressColor: AppColors.stepsGaugeOrange,
                 xpProgressColor: AppColors.secondary,
@@ -85,6 +86,7 @@ class CircularStepGauge extends StatelessWidget {
 class _StepGaugePainter extends CustomPainter {
   final double stepsProgress;
   final double xpProgress;
+  final int currentXP;
   final Color backgroundColor;
   final Color stepsProgressColor;
   final Color xpProgressColor;
@@ -92,6 +94,7 @@ class _StepGaugePainter extends CustomPainter {
   _StepGaugePainter({
     required this.stepsProgress,
     required this.xpProgress,
+    required this.currentXP,
     required this.backgroundColor,
     required this.stepsProgressColor,
     required this.xpProgressColor,
@@ -170,6 +173,9 @@ class _StepGaugePainter extends CustomPainter {
       xpProgressPaint,
     );
 
+    // Draw inner tick marks for XP (smaller, inside)
+    _drawInnerTickMarks(canvas, center, innerRadius);
+
     // Draw tick marks on the outside AFTER the bars
     _drawTickMarks(canvas, center, outerRadius);
   }
@@ -200,6 +206,66 @@ class _StepGaugePainter extends CustomPainter {
       );
 
       canvas.drawLine(inner, outer, tickPaint);
+    }
+  }
+
+  void _drawInnerTickMarks(Canvas canvas, Offset center, double radius) {
+    final tickPaint = Paint()
+      ..color = Colors.grey.shade500
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    const startAngle = 0.75 * math.pi;
+    const sweepAngle = 1.5 * math.pi;
+    const numTicks = 20;
+
+    for (int i = 0; i <= numTicks; i++) {
+      final angle = startAngle + (sweepAngle * i / numTicks);
+      // Position ticks INSIDE the XP bar
+      final outerTick = radius - 8;
+      final innerTick = i % 5 == 0 ? radius - 14 : radius - 11;
+
+      final inner = Offset(
+        center.dx + innerTick * math.cos(angle),
+        center.dy + innerTick * math.sin(angle),
+      );
+      final outer = Offset(
+        center.dx + outerTick * math.cos(angle),
+        center.dy + outerTick * math.sin(angle),
+      );
+
+      canvas.drawLine(inner, outer, tickPaint);
+    }
+
+    // Draw XP label at the end of the progress
+    if (xpProgress > 0) {
+      final xpAngle = startAngle + (sweepAngle * xpProgress);
+      final labelRadius = radius - 28;
+
+      final position = Offset(
+        center.dx + labelRadius * math.cos(xpAngle),
+        center.dy + labelRadius * math.sin(xpAngle),
+      );
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: '$currentXP',
+          style: TextStyle(
+            color: xpProgressColor,
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          position.dx - textPainter.width / 2,
+          position.dy - textPainter.height / 2,
+        ),
+      );
     }
   }
 

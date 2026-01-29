@@ -242,13 +242,13 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      body: _screens[_currentIndex],
+      bottomNavigationBar: SafeArea(
         child: Container(
+          margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
           decoration: BoxDecoration(
-            color: AppColors.navBackground,
-            borderRadius: BorderRadius.circular(50),
+            color: const Color(0xFF1E2A3A),
+            borderRadius: BorderRadius.circular(32),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withAlpha(40),
@@ -257,86 +257,49 @@ class _MainNavigationState extends State<MainNavigation> {
               ),
             ],
           ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildNavItem(
-                    index: 0,
-                    icon: Icons.home_outlined,
-                    activeIcon: Icons.home,
-                    label: 'Actividad',
-                  ),
-                  _buildNavItem(
-                    index: 1,
-                    icon: Icons.history_outlined,
-                    activeIcon: Icons.history,
-                    label: 'Historial',
-                  ),
-                  _buildNavItem(
-                    index: 2,
-                    icon: Icons.people_outline,
-                    activeIcon: Icons.people,
-                    label: 'Social',
-                  ),
-                  _buildNavItem(
-                    index: 3,
-                    icon: Icons.map_outlined,
-                    activeIcon: Icons.map,
-                    label: 'Mapa',
-                  ),
-                ],
-              ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              enableFeedback: false,
+              selectedItemColor: AppColors.primary,
+              unselectedItemColor: Colors.grey,
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+              iconSize: 22,
+              selectedFontSize: 9,
+              unselectedFontSize: 9,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home_outlined),
+                  activeIcon: Icon(Icons.home, color: Colors.white),
+                  label: 'Actividad',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.history_outlined),
+                  activeIcon: Icon(Icons.history, color: Colors.white),
+                  label: 'Historial',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.people_outline),
+                  activeIcon: Icon(Icons.people, color: Colors.white),
+                  label: 'Social',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.map_outlined),
+                  activeIcon: Icon(Icons.map, color: Colors.white),
+                  label: 'Mapa',
+                ),
+              ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required int index,
-    required IconData icon,
-    required IconData activeIcon,
-    required String label,
-  }) {
-    final isSelected = _currentIndex == index;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
-      child: SizedBox(
-        width: 70,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isSelected ? activeIcon : icon,
-              color: isSelected
-                  ? AppColors.navSelected
-                  : AppColors.navUnselected,
-              size: 26,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 10,
-                color: isSelected
-                    ? AppColors.navSelected
-                    : AppColors.navUnselected,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ],
         ),
       ),
     );

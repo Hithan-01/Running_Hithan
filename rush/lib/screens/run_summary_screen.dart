@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import '../models/run.dart';
 import '../models/achievement.dart';
 import '../services/gamification_service.dart';
@@ -9,11 +10,7 @@ class RunSummaryScreen extends StatelessWidget {
   final Run run;
   final RunResult result;
 
-  const RunSummaryScreen({
-    super.key,
-    required this.run,
-    required this.result,
-  });
+  const RunSummaryScreen({super.key, required this.run, required this.result});
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +85,10 @@ class RunSummaryScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const MainNavigation()),
+                    (route) => false,
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 18),
@@ -98,10 +98,7 @@ class RunSummaryScreen extends StatelessWidget {
                   ),
                   child: const Text(
                     'CONTINUAR',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -192,10 +189,7 @@ class RunSummaryScreen extends StatelessWidget {
         ),
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
       ],
     );
@@ -214,20 +208,14 @@ class RunSummaryScreen extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.secondary.withAlpha(77),
-        ),
+        border: Border.all(color: AppColors.secondary.withAlpha(77)),
       ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.star,
-                color: AppColors.secondary,
-                size: 28,
-              ),
+              const Icon(Icons.star, color: AppColors.secondary, size: 28),
               const SizedBox(width: 8),
               Text(
                 '+${result.totalXp} XP',
@@ -345,85 +333,90 @@ class RunSummaryScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        ...result.newAchievements.map((achievement) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.success, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(13),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+        ...result.newAchievements.map(
+          (achievement) => Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.success, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(13),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withAlpha(26),
+                    shape: BoxShape.circle,
                   ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withAlpha(26),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      AchievementIcons.getIcon(achievement.icon),
-                      color: AppColors.success,
-                      size: 28,
-                    ),
+                  child: Icon(
+                    AchievementIcons.getIcon(achievement.icon),
+                    color: AppColors.success,
+                    size: 28,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          achievement.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        achievement.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
                         ),
-                        Text(
-                          achievement.description,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
+                      ),
+                      Text(
+                        achievement.description,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.secondary.withAlpha(26),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.star_rounded,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withAlpha(26),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.star_rounded,
+                        color: AppColors.secondary,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '+${achievement.xpReward}',
+                        style: const TextStyle(
                           color: AppColors.secondary,
-                          size: 16,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '+${achievement.xpReward}',
-                          style: const TextStyle(
-                            color: AppColors.secondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -444,31 +437,35 @@ class RunSummaryScreen extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: result.newPois.map((poi) => Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withAlpha(51),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.accent),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(poi.icon),
-                    const SizedBox(width: 8),
-                    Text(
-                      poi.name,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
+          children: result.newPois
+              .map(
+                (poi) => Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withAlpha(51),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.accent),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(poi.icon),
+                      const SizedBox(width: 8),
+                      Text(
+                        poi.name,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              )).toList(),
+              )
+              .toList(),
         ),
       ],
     );
