@@ -8,6 +8,7 @@ class RunStatsPanel extends StatelessWidget {
   final double pace; // min/km
   final bool isLive;
   final bool compact;
+  final bool darkMode;
 
   const RunStatsPanel({
     super.key,
@@ -16,6 +17,7 @@ class RunStatsPanel extends StatelessWidget {
     required this.pace,
     this.isLive = false,
     this.compact = false,
+    this.darkMode = false,
   });
 
   @override
@@ -76,7 +78,7 @@ class RunStatsPanel extends StatelessWidget {
               Container(
                 width: 1,
                 height: 40,
-                color: AppColors.textMuted.withOpacity(0.3),
+                color: AppColors.textMuted.withAlpha(77),
               ),
               _buildStatItem(
                 label: 'RITMO',
@@ -118,14 +120,21 @@ class RunStatsPanel extends StatelessWidget {
   }
 
   Widget _buildCompact() {
+    final bgColor = darkMode
+        ? AppColors.navBackground.withAlpha(230)
+        : AppColors.surface.withAlpha(242);
+    final dividerColor = darkMode
+        ? Colors.white.withAlpha(40)
+        : AppColors.textMuted.withAlpha(77);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface.withAlpha(242),
+        color: bgColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(13),
+            color: Colors.black.withAlpha(40),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -138,24 +147,13 @@ class RunStatsPanel extends StatelessWidget {
             value: Formatters.distanceKm(distance / 1000),
             label: 'km',
           ),
-          Container(
-            width: 1,
-            height: 30,
-            color: AppColors.textMuted.withOpacity(0.3),
-          ),
+          Container(width: 1, height: 30, color: dividerColor),
           _buildCompactStat(
             value: Formatters.duration(duration),
             label: 'tiempo',
           ),
-          Container(
-            width: 1,
-            height: 30,
-            color: AppColors.textMuted.withOpacity(0.3),
-          ),
-          _buildCompactStat(
-            value: Formatters.pace(pace),
-            label: '/km',
-          ),
+          Container(width: 1, height: 30, color: dividerColor),
+          _buildCompactStat(value: Formatters.pace(pace), label: '/km'),
         ],
       ),
     );
@@ -169,11 +167,7 @@ class RunStatsPanel extends StatelessWidget {
   }) {
     return Column(
       children: [
-        Icon(
-          icon,
-          color: AppColors.textSecondary,
-          size: 20,
-        ),
+        Icon(icon, color: AppColors.textSecondary, size: 20),
         const SizedBox(height: 4),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -212,26 +206,23 @@ class RunStatsPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildCompactStat({
-    required String value,
-    required String label,
-  }) {
+  Widget _buildCompactStat({required String value, required String label}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: darkMode ? Colors.white : AppColors.textPrimary,
           ),
         ),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
-            color: AppColors.textSecondary,
+            color: darkMode ? Colors.white70 : AppColors.textSecondary,
           ),
         ),
       ],

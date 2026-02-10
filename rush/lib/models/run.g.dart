@@ -27,13 +27,14 @@ class RunAdapter extends TypeAdapter<Run> {
       poisVisited: (fields[7] as List).cast<String>(),
       achievementsUnlocked: (fields[8] as List).cast<String>(),
       createdAt: fields[9] as DateTime,
+      isSynced: fields[10] as bool? ?? false,
     );
   }
 
   @override
   void write(BinaryWriter writer, Run obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +54,9 @@ class RunAdapter extends TypeAdapter<Run> {
       ..writeByte(8)
       ..write(obj.achievementsUnlocked)
       ..writeByte(9)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(10)
+      ..write(obj.isSynced);
   }
 
   @override

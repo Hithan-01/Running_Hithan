@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/gamification_service.dart';
 import '../models/achievement.dart';
 import '../widgets/xp_bar.dart';
@@ -38,6 +39,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             backgroundColor: AppColors.background,
             elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout_rounded, color: AppColors.error),
+                onPressed: () => _showLogoutDialog(context),
+                tooltip: 'Cerrar sesión',
+              ),
+            ],
           ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -58,6 +66,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 // Achievements
                 _buildAchievementsSection(gamification),
+                const SizedBox(height: 24),
+
+                // Dev tools (temporary for testing)
+                _buildDevTools(gamification),
               ],
             ),
           ),
@@ -92,10 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   colors: [AppColors.primary, AppColors.primaryDark],
                 ),
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.secondary,
-                  width: 3,
-                ),
+                border: Border.all(color: AppColors.secondary, width: 3),
               ),
               child: Center(
                 child: Text(
@@ -160,7 +169,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showEditNameDialog(BuildContext context, String currentName, GamificationService gamification) {
+  void _showEditNameDialog(
+    BuildContext context,
+    String currentName,
+    GamificationService gamification,
+  ) {
     final controller = TextEditingController(text: currentName);
     final formKey = GlobalKey<FormState>();
 
@@ -232,6 +245,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
               foregroundColor: Colors.white,
             ),
             child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text(
+          'Cerrar sesión',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          '¿Estás seguro que quieres cerrar sesión?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Go back from profile
+              await FirebaseAuth.instance.signOut();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cerrar sesión'),
           ),
         ],
       ),
@@ -470,10 +521,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           itemCount: Achievements.all.length,
           itemBuilder: (context, index) {
             final achievement = Achievements.all[index];
-            final isUnlocked = gamification.isAchievementUnlocked(achievement.id);
+            final isUnlocked = gamification.isAchievementUnlocked(
+              achievement.id,
+            );
 
             return GestureDetector(
-              onTap: () => _showAchievementDialog(context, achievement, isUnlocked),
+              onTap: () =>
+                  _showAchievementDialog(context, achievement, isUnlocked),
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.surface,
@@ -578,16 +632,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Text(
               achievement.description,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-              ),
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: isUnlocked
                     ? AppColors.success.withAlpha(26)
@@ -598,7 +647,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    isUnlocked ? Icons.check_circle_rounded : Icons.star_rounded,
+                    isUnlocked
+                        ? Icons.check_circle_rounded
+                        : Icons.star_rounded,
                     color: isUnlocked ? AppColors.success : AppColors.secondary,
                     size: 18,
                   ),
@@ -606,7 +657,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Text(
                     isUnlocked ? 'Desbloqueado' : '+${achievement.xpReward} XP',
                     style: TextStyle(
-                      color: isUnlocked ? AppColors.success : AppColors.secondary,
+                      color: isUnlocked
+                          ? AppColors.success
+                          : AppColors.secondary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -622,6 +675,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'Cerrar',
               style: TextStyle(color: AppColors.textSecondary),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDevTools(GamificationService gamification) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.warning.withAlpha(100), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.bug_report_rounded, color: AppColors.warning, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Dev Tools (temporal)',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await gamification.regenerateMockRuns();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('3 carreras de prueba creadas')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.replay_rounded, size: 18),
+                  label: const Text('Mock Runs', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.secondary,
+                    side: const BorderSide(color: AppColors.secondary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await gamification.addTestXp(100);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('+100 XP agregados')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.bolt_rounded, size: 18),
+                  label: const Text('+100 XP', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

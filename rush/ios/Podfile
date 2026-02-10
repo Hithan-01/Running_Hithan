@@ -28,7 +28,8 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
+  use_modular_headers!
+  use_frameworks! :linkage => :static
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
@@ -40,4 +41,16 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
   end
+
+  puts "🔧 Fixing gRPC-Core source: Ensuring 'template' keyword exists..."
+  file_path = 'Pods/gRPC-Core/src/core/lib/promise/detail/basic_seq.h'
+  if File.exist?(file_path)
+    # First remove it to ensure clean slate (avoid double template), then add it back
+    system("sed -i '' 's/Tr::template CheckResultAndRunNext/Tr::CheckResultAndRunNext/g' '#{file_path}'")
+    system("sed -i '' 's/Tr::CheckResultAndRunNext/Tr::template CheckResultAndRunNext/g' '#{file_path}'")
+  end
+
+  puts "🔗 Fixing gRPC-Core module map..."
+  system("mkdir -p Pods/Headers/Private/grpc")
+  system("ln -sf '../../../Target Support Files/gRPC-Core/gRPC-Core.modulemap' 'Pods/Headers/Private/grpc/gRPC-Core.modulemap'")
 end

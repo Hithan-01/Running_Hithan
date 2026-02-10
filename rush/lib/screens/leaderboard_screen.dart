@@ -76,10 +76,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         final leaderboardData = _getMockLeaderboard(
           currentUserId: user.id,
           currentUserName: user.name,
-          currentUserXp: isWeekly ? (user.xp ~/ 4) : user.xp,
-          currentUserDistance: isWeekly
-              ? (user.totalDistance ~/ 4)
-              : user.totalDistance,
+          currentUserXp: user.xp,
+          currentUserDistance: user.totalDistance,
+          currentUserLevel: user.level,
         );
 
         return Column(
@@ -109,6 +108,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     required String currentUserName,
     required int currentUserXp,
     required int currentUserDistance,
+    required int currentUserLevel,
   }) {
     final mockUsers = [
       LeaderboardEntry(
@@ -154,7 +154,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       name: currentUserName,
       xp: currentUserXp,
       distance: currentUserDistance,
-      level: context.read<GamificationService>().level,
+      level: currentUserLevel,
       isCurrentUser: true,
     );
 

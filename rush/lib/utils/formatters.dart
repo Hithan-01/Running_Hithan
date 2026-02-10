@@ -33,7 +33,7 @@ class Formatters {
     if (hours > 0) {
       return '${hours}h ${minutes}m';
     }
-    return '${minutes} min';
+    return '$minutes min';
   }
 
   // Pace formatting (minutes per km)

@@ -34,6 +34,9 @@ class Run extends HiveObject {
   @HiveField(9)
   DateTime createdAt;
 
+  @HiveField(10)
+  bool isSynced;
+
   Run({
     required this.id,
     required this.oderId,
@@ -45,6 +48,7 @@ class Run extends HiveObject {
     this.poisVisited = const [],
     this.achievementsUnlocked = const [],
     required this.createdAt,
+    this.isSynced = false,
   });
 
   // Distance in km

@@ -1,16 +1,21 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/user.dart';
 import '../models/run.dart';
 import '../models/achievement.dart';
 import '../models/poi.dart';
 import '../models/mission.dart';
 import 'database_service.dart';
+import 'sync_service.dart';
 
 class GamificationService extends ChangeNotifier {
   User? _user;
   List<ActiveMission> _activeMissions = [];
   List<String> _unlockedAchievementIds = [];
   List<String> _visitedPoiIds = [];
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   // Callbacks for UI notifications
   Function(Achievement)? onAchievementUnlocked;
@@ -33,8 +38,47 @@ class GamificationService extends ChangeNotifier {
     _user = DatabaseService.getCurrentUser();
     if (_user != null) {
       _loadUserData();
+      // Intentar sincronizar carreras pendientes al iniciar
+      _syncPendingRuns();
+      // Escuchar cambios de conectividad para auto-sincronizar
+      _setupConnectivityListener();
     }
     notifyListeners();
+  }
+
+  void _setupConnectivityListener() {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result) {
+      // Si recuperamos conexión, intentar sincronizar
+      if (!result.contains(ConnectivityResult.none)) {
+        debugPrint('🌐 Conexión detectada, sincronizando carreras pendientes...');
+        _syncPendingRuns();
+      }
+    });
+  }
+
+  Future<void> _syncPendingRuns() async {
+    if (_user == null) return;
+
+    final firebaseUser = auth.FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) return;
+
+    try {
+      final syncedCount = await SyncService().syncPendingRuns(
+        firebaseUser.uid,
+        _user!.id,
+      );
+      if (syncedCount > 0) {
+        debugPrint('✅ Se sincronizaron $syncedCount carreras');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error en sincronización automática: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
   }
 
   void _loadUserData() {
@@ -123,6 +167,22 @@ class GamificationService extends ChangeNotifier {
     _user!.currentStreak = 2;
     _user!.addXp(690);
     await DatabaseService.updateUser(_user!);
+  }
+
+  // Regenerate mock runs (for testing)
+  Future<void> regenerateMockRuns() async {
+    if (_user == null) return;
+    await _createMockRuns();
+    _loadUserData();
+    notifyListeners();
+  }
+
+  // Add XP (for testing AnimatedContainer)
+  Future<void> addTestXp(int amount) async {
+    if (_user == null) return;
+    _user!.addXp(amount);
+    await DatabaseService.updateUser(_user!);
+    notifyListeners();
   }
 
   // Update user name
@@ -387,6 +447,9 @@ class GamificationService extends ChangeNotifier {
   bool isPoiVisited(String poiId) {
     return _visitedPoiIds.contains(poiId);
   }
+
+  // Get visited POI count
+  int get visitedPoiCount => _visitedPoiIds.length;
 
   // Get user stats
   Map<String, dynamic> getStats() {

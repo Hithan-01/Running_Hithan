@@ -81,8 +81,23 @@ class DatabaseService {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
+  static List<Run> getUnsyncedRuns(String oderId) {
+    return _runBox.values
+        .where((run) => run.oderId == oderId && !run.isSynced)
+        .toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt)); // Oldest first for sync
+  }
+
   static Future<void> saveRun(Run run) async {
     await _runBox.put(run.id, run);
+  }
+
+  static Future<void> markRunAsSynced(String runId) async {
+    final run = _runBox.get(runId);
+    if (run != null) {
+      run.isSynced = true;
+      await run.save();
+    }
   }
 
   static Run? getRunById(String id) {

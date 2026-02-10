@@ -7,6 +7,7 @@ import '../widgets/mission_card.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
 import 'map_screen.dart';
+import 'missions_screen.dart';
 import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -50,10 +51,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? estimatedSteps
                           : 7250, // Mock data if no real data
                       goalSteps: 20000,
-                      currentXP: gamification.xp > 0
-                          ? gamification.xp
-                          : 450, // Mock XP
-                      xpToNextLevel: 1000,
+                      currentXP: user.xp - user.xpForCurrentLevel,
+                      xpToNextLevel: user.xpForNextLevel - user.xpForCurrentLevel,
                     ),
                   ),
 
@@ -362,7 +361,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             TextButton(
               onPressed: () {
-                // TODO: Navigate to all missions
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MissionsScreen()),
+                );
               },
               child: const Text(
                 'Ver todas',
@@ -407,22 +409,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           )
         else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: activeMissions.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final activeMission = activeMissions[index];
-              final mission = Missions.getById(activeMission.missionId);
-              if (mission == null) return const SizedBox.shrink();
+          SizedBox(
+            height: 160,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: activeMissions.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final activeMission = activeMissions[index];
+                final mission = Missions.getById(activeMission.missionId);
+                if (mission == null) return const SizedBox.shrink();
 
-              return MissionCard(
-                mission: mission,
-                currentProgress: activeMission.currentProgress,
-                isCompleted: activeMission.isCompleted,
-              );
-            },
+                return MissionCard(
+                  mission: mission,
+                  currentProgress: activeMission.currentProgress,
+                  isCompleted: activeMission.isCompleted,
+                  compact: true,
+                );
+              },
+            ),
           ),
       ],
     );

@@ -2,15 +2,16 @@
 
 App de running gamificada para el campus de la Universidad de Montemorelos.
 
-## Stack Tecnologico
+## Stack Tecnológico
 
-| Tecnologia | Uso |
+| Tecnología | Uso |
 |------------|-----|
 | Flutter 3.9+ | Framework UI |
 | Dart | Lenguaje |
-| Google Maps Flutter | Mapas y rutas |
+| flutter_map + OpenStreetMap | Mapas y rutas (gratis, sin API key) |
 | Geolocator | Tracking GPS |
-| sqflite | Base de datos local |
+| Hive | Base de datos local (NoSQL) |
+| Firebase Auth | Autenticación de usuarios |
 | Provider | State management |
 
 ## Estructura del Proyecto
@@ -28,12 +29,14 @@ lib/
 │   ├── map_screen.dart
 │   ├── profile_screen.dart
 │   ├── leaderboard_screen.dart
-│   └── history_screen.dart
+│   ├── history_screen.dart
+│   └── run_summary_screen.dart
 ├── widgets/
 │   ├── xp_bar.dart
 │   ├── mission_card.dart
 │   ├── poi_marker.dart
-│   └── run_stats_panel.dart
+│   ├── run_stats_panel.dart
+│   └── circular_step_gauge.dart
 ├── services/
 │   ├── location_service.dart
 │   ├── database_service.dart
@@ -43,60 +46,21 @@ lib/
     └── formatters.dart
 ```
 
-## Base de Datos (SQLite)
+## Base de Datos (Hive)
 
-### Tablas
+Hive es una base de datos NoSQL ligera y rápida para Flutter. Los datos se guardan localmente en el dispositivo.
 
-```sql
--- Usuario
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    faculty TEXT,
-    semester INTEGER,
-    xp INTEGER DEFAULT 0,
-    level INTEGER DEFAULT 1,
-    created_at DATETIME
-);
+### Boxes (Colecciones)
 
--- Carreras
-CREATE TABLE runs (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    distance REAL,
-    duration INTEGER,
-    avg_pace REAL,
-    route TEXT,  -- JSON de coordenadas
-    xp_earned INTEGER,
-    created_at DATETIME
-);
+| Box | Modelo | Descripción |
+|-----|--------|-------------|
+| `users` | `User` | Datos del usuario |
+| `runs` | `Run` | Historial de carreras |
+| `achievements` | `UnlockedAchievement` | Logros desbloqueados |
+| `visited_pois` | `VisitedPoi` | POIs visitados |
+| `active_missions` | `ActiveMission` | Misiones activas |
 
--- Logros desbloqueados
-CREATE TABLE achievements (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    achievement_id TEXT,
-    unlocked_at DATETIME
-);
-
--- POIs visitados
-CREATE TABLE pois_visited (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    poi_id TEXT,
-    visited_at DATETIME
-);
-
--- Misiones completadas
-CREATE TABLE missions_completed (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    mission_id TEXT,
-    completed_at DATETIME
-);
-```
-
-## Instalacion
+## Instalación
 
 ```bash
 # Clonar repositorio
@@ -105,6 +69,9 @@ cd rush
 
 # Instalar dependencias
 flutter pub get
+
+# Generar código de Hive (adapters)
+dart run build_runner build
 
 # Ejecutar
 flutter run
@@ -116,49 +83,65 @@ flutter run
 dependencies:
   flutter:
     sdk: flutter
-  google_maps_flutter: ^2.5.0
-  geolocator: ^10.1.0
-  sqflite: ^2.3.0
-  provider: ^6.1.0
-  path_provider: ^2.1.0
+  flutter_map: ^6.1.0        # Mapas OpenStreetMap (gratis)
+  latlong2: ^0.9.0           # Coordenadas
+  geolocator: ^10.1.0        # GPS
+  hive: ^2.2.3               # DB local
+  hive_flutter: ^1.1.0
+  firebase_core: ^2.24.0     # Firebase
+  firebase_auth: ^4.16.0     # Autenticación
+  provider: ^6.1.0           # State management
   intl: ^0.18.0
+  uuid: ^4.2.1
+
+dev_dependencies:
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.6
 ```
 
-## Configuracion
+## Configuración
 
-### Google Maps API
+### Firebase (Autenticación)
 
-1. Obtener API key en [Google Cloud Console](https://console.cloud.google.com/)
-2. Habilitar Maps SDK for Android/iOS
+1. Crear proyecto en [Firebase Console](https://console.firebase.google.com/)
+2. Agregar app iOS/Android
+3. Descargar archivo de configuración:
+   - iOS: `GoogleService-Info.plist` → `ios/Runner/`
+   - Android: `google-services.json` → `android/app/`
+4. Habilitar "Email/Password" en Authentication
 
-**Android** (`android/app/src/main/AndroidManifest.xml`):
-```xml
-<meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="TU_API_KEY"/>
-```
+### Mapas (OpenStreetMap)
 
-**iOS** (`ios/Runner/AppDelegate.swift`):
-```swift
-GMSServices.provideAPIKey("TU_API_KEY")
-```
+**¡No requiere configuración!** Los mapas de OpenStreetMap son gratuitos y no necesitan API key.
 
-### Permisos de Ubicacion
-
-**Android** (`android/app/src/main/AndroidManifest.xml`):
-```xml
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
-```
+### Permisos de Ubicación (iOS)
 
 **iOS** (`ios/Runner/Info.plist`):
 ```xml
 <key>NSLocationWhenInUseUsageDescription</key>
-<string>Necesitamos tu ubicacion para trackear tu carrera</string>
+<string>Necesitamos tu ubicación para trackear tu carrera</string>
 <key>NSLocationAlwaysUsageDescription</key>
-<string>Necesitamos tu ubicacion para trackear tu carrera en segundo plano</string>
+<string>Necesitamos tu ubicación para trackear tu carrera en segundo plano</string>
 ```
+
+## Gamificación
+
+### Sistema de XP y Niveles
+- 50 XP por kilómetro corrido
+- 2 XP por minuto de carrera
+- Bonos por visitar POIs y completar misiones
+
+### POIs del Campus (10 puntos)
+- **Académicos**: Biblioteca, Facultad de Ingeniería, Facultad de Salud
+- **Deportivos**: Gimnasio, Pista de Atletismo, Canchas
+- **Landmarks**: Capilla, Cafetería, Lago, Entrada Principal
+
+### Logros (16 achievements)
+- Exploración, Distancia, Consistencia, Velocidad, Secretos
+
+### Misiones
+- 5 misiones diarias
+- 3 misiones semanales
 
 ## Arquitectura
 
@@ -175,25 +158,29 @@ GMSServices.provideAPIKey("TU_API_KEY")
 │  │ Location │ Database │ Gamific. │    │
 │  └──────────┴──────────┴──────────┘    │
 ├─────────────────────────────────────────┤
-│           SQLite / GPS                  │
+│            Hive / GPS                   │
 └─────────────────────────────────────────┘
 ```
 
-## Comandos Utiles
+## Comandos Útiles
 
 ```bash
+# Ejecutar en modo debug
+flutter run
+
 # Build Android APK
 flutter build apk --release
 
 # Build iOS
 flutter build ios --release
 
-# Analizar codigo
-flutter analyze
-
-# Tests
-flutter test
+# Regenerar código Hive
+dart run build_runner build --delete-conflicting-outputs
 
 # Limpiar cache
 flutter clean && flutter pub get
 ```
+
+---
+
+**"RUSH - Run. Unlock. Share. Hustle."**

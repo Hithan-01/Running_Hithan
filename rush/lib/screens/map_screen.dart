@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../services/location_service.dart';
@@ -9,6 +11,9 @@ import '../widgets/run_stats_panel.dart';
 import '../widgets/poi_marker.dart';
 import '../utils/constants.dart';
 import 'run_summary_screen.dart';
+import '../models/run_model.dart';
+import '../services/sync_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -18,7 +23,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  GoogleMapController? _mapController;
+  final MapController _mapController = MapController();
   Poi? _selectedPoi;
   bool _isStarting = false;
 
@@ -40,14 +45,17 @@ class _MapScreenState extends State<MapScreen> {
         return Scaffold(
           body: Stack(
             children: [
-              // Map
+              // Map — full screen
               _buildMap(location, gamification),
 
-              // Top bar with back button
+              // Top bar (back button only)
               _buildTopBar(location),
 
               // Stats panel (when tracking)
               if (location.isTracking) _buildStatsOverlay(location),
+
+              // My location FAB — bottom right
+              _buildMyLocationButton(),
 
               // POI info card
               if (_selectedPoi != null) _buildPoiInfoOverlay(gamification),
@@ -63,93 +71,112 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildMap(LocationService location, GamificationService gamification) {
     final currentPos = location.currentPosition;
-    final initialPos = currentPos != null
+    final center = currentPos != null
         ? LatLng(currentPos.latitude, currentPos.longitude)
         : const LatLng(
             AppConstants.defaultLatitude,
             AppConstants.defaultLongitude,
           );
 
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: initialPos,
-        zoom: AppConstants.defaultZoom,
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: center,
+        initialZoom: AppConstants.defaultZoom,
+        onTap: (_, __) {
+          setState(() {
+            _selectedPoi = null;
+          });
+        },
       ),
-      onMapCreated: (controller) {
-        _mapController = controller;
-        _setMapStyle(controller);
-      },
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
-      mapToolbarEnabled: false,
-      markers: _buildMarkers(gamification),
-      polylines: _buildPolylines(location),
-      onTap: (_) {
-        setState(() {
-          _selectedPoi = null;
-        });
-      },
+      children: [
+        // OpenStreetMap tiles
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.aerdr.rush',
+          maxZoom: 19,
+        ),
+
+        // Route polyline
+        if (location.isTracking && location.routePoints.isNotEmpty)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: location.routePoints
+                    .map((p) => LatLng(p.latitude, p.longitude))
+                    .toList(),
+                color: AppColors.accent,
+                strokeWidth: 5,
+              ),
+            ],
+          ),
+
+        // Current location marker
+        if (currentPos != null)
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: LatLng(currentPos.latitude, currentPos.longitude),
+                width: 30,
+                height: 30,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withAlpha(100),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+        // POI markers
+        MarkerLayer(markers: _buildPoiMarkers(gamification)),
+      ],
     );
   }
 
-  Future<void> _setMapStyle(GoogleMapController controller) async {
-    // Dark map style
-    const String darkMapStyle = '''
-    [
-      {"elementType": "geometry", "stylers": [{"color": "#1d2c4d"}]},
-      {"elementType": "labels.text.fill", "stylers": [{"color": "#8ec3b9"}]},
-      {"elementType": "labels.text.stroke", "stylers": [{"color": "#1a3646"}]},
-      {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#304a7d"}]},
-      {"featureType": "road", "elementType": "geometry.stroke", "stylers": [{"color": "#255763"}]},
-      {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#0e1626"}]}
-    ]
-    ''';
-    await controller.setMapStyle(darkMapStyle);
-  }
-
-  Set<Marker> _buildMarkers(GamificationService gamification) {
-    final markers = <Marker>{};
-
-    for (final poi in CampusPois.all) {
+  List<Marker> _buildPoiMarkers(GamificationService gamification) {
+    return CampusPois.all.map((poi) {
       final isVisited = gamification.isPoiVisited(poi.id);
 
-      markers.add(
-        Marker(
-          markerId: MarkerId(poi.id),
-          position: LatLng(poi.latitude, poi.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            isVisited ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueViolet,
-          ),
+      return Marker(
+        point: LatLng(poi.latitude, poi.longitude),
+        width: 50,
+        height: 50,
+        child: GestureDetector(
           onTap: () {
             setState(() {
               _selectedPoi = poi;
             });
           },
+          child: Container(
+            decoration: BoxDecoration(
+              color: isVisited ? AppColors.success : AppColors.secondary,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(50),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(poi.icon, style: const TextStyle(fontSize: 20)),
+            ),
+          ),
         ),
       );
-    }
-
-    return markers;
-  }
-
-  Set<Polyline> _buildPolylines(LocationService location) {
-    if (!location.isTracking || location.routePoints.isEmpty) {
-      return {};
-    }
-
-    final points = location.routePoints
-        .map((p) => LatLng(p.latitude, p.longitude))
-        .toList();
-
-    return {
-      Polyline(
-        polylineId: const PolylineId('route'),
-        points: points,
-        color: AppColors.accent,
-        width: 5,
-      ),
-    };
+    }).toList();
   }
 
   Widget _buildTopBar(LocationService location) {
@@ -158,20 +185,52 @@ class _MapScreenState extends State<MapScreen> {
       left: 16,
       right: 16,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          // Center on location button
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(12),
+          // Back button (only when not tracking AND screen was pushed as route)
+          if (!location.isTracking && Navigator.of(context).canPop())
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+              ),
             ),
-            child: IconButton(
-              onPressed: _centerOnLocation,
-              icon: const Icon(Icons.my_location, color: AppColors.textPrimary),
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMyLocationButton() {
+    return Positioned(
+      bottom: 200,
+      right: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(30),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IconButton(
+          onPressed: _centerOnLocation,
+          icon: const Icon(Icons.my_location, color: AppColors.textPrimary),
+        ),
       ),
     );
   }
@@ -179,9 +238,10 @@ class _MapScreenState extends State<MapScreen> {
   void _centerOnLocation() async {
     final location = context.read<LocationService>();
     final pos = location.currentPosition ?? await location.getCurrentPosition();
-    if (pos != null && _mapController != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLng(LatLng(pos.latitude, pos.longitude)),
+    if (pos != null) {
+      _mapController.move(
+        LatLng(pos.latitude, pos.longitude),
+        _mapController.camera.zoom,
       );
     }
   }
@@ -197,6 +257,7 @@ class _MapScreenState extends State<MapScreen> {
         pace: location.avgPace,
         isLive: true,
         compact: true,
+        darkMode: true,
       ),
     );
   }
@@ -222,83 +283,108 @@ class _MapScreenState extends State<MapScreen> {
     LocationService location,
     GamificationService gamification,
   ) {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).padding.bottom + 20,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: location.isTracking
-            ? _buildTrackingControls(location, gamification)
-            : _buildStartControls(location),
-      ),
-    );
+    if (location.isTracking) {
+      return _buildTrackingControls(location, gamification);
+    }
+    return _buildStartControls(location, gamification);
   }
 
-  Widget _buildStartControls(LocationService location) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'Listo para correr?',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+  Widget _buildStartControls(LocationService location, GamificationService gamification) {
+    final visitedCount = gamification.visitedPoiCount;
+    final totalCount = CampusPois.all.length;
+
+    return Positioned(
+      bottom: MediaQuery.of(context).padding.bottom + 24,
+      left: 0,
+      right: 0,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // POI summary pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.navBackground.withAlpha(200),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('🗺 ', style: TextStyle(fontSize: 14)),
+                Text(
+                  '$visitedCount/$totalCount POIs visitados',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Visita POIs en el campus para ganar XP extra',
-          style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isStarting ? null : () => _startRun(location),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          const SizedBox(height: 10),
+          // Subtitle pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(90),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Text(
+              'Visita POIs para ganar XP',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
               ),
             ),
-            child: _isStarting
-                ? const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.play_arrow, size: 28),
-                      SizedBox(width: 8),
-                      Text(
-                        'INICIAR',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+          ),
+          const SizedBox(height: 16),
+          // Large circular START button
+          GestureDetector(
+            onTap: _isStarting ? null : () => _startRun(location),
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryLight,
+                    AppColors.accent,
+                    AppColors.primaryDark,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accent.withAlpha(120),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: _isStarting
+                  ? const Center(
+                      child: SizedBox(
+                        height: 28,
+                        width: 28,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
                         ),
                       ),
-                    ],
-                  ),
+                    )
+                  : const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 42,
+                    ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -312,7 +398,7 @@ class _MapScreenState extends State<MapScreen> {
     if (!started && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No se pudo acceder a la ubicacion'),
+          content: Text('No se pudo acceder a la ubicación'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -323,32 +409,49 @@ class _MapScreenState extends State<MapScreen> {
     LocationService location,
     GamificationService gamification,
   ) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        // Pause/Resume button
-        _buildControlButton(
-          icon: location.isPaused ? Icons.play_arrow : Icons.pause,
-          label: location.isPaused ? 'Reanudar' : 'Pausar',
-          color: AppColors.warning,
-          onPressed: () {
-            if (location.isPaused) {
-              location.resumeTracking();
-            } else {
-              location.pauseTracking();
-            }
-          },
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 16,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
         ),
+        decoration: BoxDecoration(
+          color: AppColors.navBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // Pause/Resume button
+            _buildControlButton(
+              icon: location.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+              label: location.isPaused ? 'Reanudar' : 'Pausar',
+              color: AppColors.warning,
+              onPressed: () {
+                if (location.isPaused) {
+                  location.resumeTracking();
+                } else {
+                  location.pauseTracking();
+                }
+              },
+            ),
 
-        // Stop button
-        _buildControlButton(
-          icon: Icons.stop,
-          label: 'Terminar',
-          color: AppColors.error,
-          onPressed: () => _stopRun(location, gamification),
-          isLarge: true,
+            // Stop button
+            _buildControlButton(
+              icon: Icons.stop_rounded,
+              label: 'Terminar',
+              color: AppColors.error,
+              onPressed: () => _stopRun(location, gamification),
+              isLarge: true,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -359,7 +462,7 @@ class _MapScreenState extends State<MapScreen> {
     required VoidCallback onPressed,
     bool isLarge = false,
   }) {
-    final size = isLarge ? 72.0 : 56.0;
+    final size = isLarge ? 64.0 : 52.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -370,13 +473,13 @@ class _MapScreenState extends State<MapScreen> {
             width: size,
             height: size,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: isLarge ? 36 : 28),
+            child: Icon(icon, color: Colors.white, size: isLarge ? 32 : 26),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
           label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
         ),
       ],
     );
@@ -391,8 +494,8 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text('Terminar carrera?'),
-        content: const Text('Quieres guardar esta carrera?'),
+        title: const Text('¿Terminar carrera?'),
+        content: const Text('¿Quieres guardar esta carrera?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -431,6 +534,34 @@ class _MapScreenState extends State<MapScreen> {
     // Process run with gamification
     final result = await gamification.processRun(run);
 
+    // Sync to Firebase
+    try {
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser != null) {
+        final endTime = run.createdAt.add(Duration(seconds: run.duration));
+
+        final runModel = RunModel.create(
+          userId: firebaseUser.uid,
+          startTime: run.createdAt,
+          endTime: endTime,
+          distanceKm: run.distance / 1000.0,
+          routePoints: run.route
+              .map((p) => LatLng(p.latitude, p.longitude))
+              .toList(),
+        );
+
+        // Upload via SyncService with local run ID for marking as synced
+        final synced = await SyncService().uploadRun(runModel, localRunId: run.id);
+        if (synced) {
+          debugPrint('✅ Carrera sincronizada inmediatamente');
+        } else {
+          debugPrint('⏳ Carrera se sincronizará cuando haya internet');
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ Error syncing run: $e");
+    }
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -443,7 +574,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
-    _mapController?.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 }

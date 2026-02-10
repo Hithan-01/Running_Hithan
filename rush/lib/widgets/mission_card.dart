@@ -6,6 +6,7 @@ class MissionCard extends StatelessWidget {
   final Mission mission;
   final int currentProgress;
   final bool isCompleted;
+  final bool compact;
   final VoidCallback? onTap;
 
   const MissionCard({
@@ -13,6 +14,7 @@ class MissionCard extends StatelessWidget {
     required this.mission,
     required this.currentProgress,
     this.isCompleted = false,
+    this.compact = false,
     this.onTap,
   });
 
@@ -39,6 +41,175 @@ class MissionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return compact ? _buildCompact(context) : _buildFull(context);
+  }
+
+  Widget _buildCompact(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 140,
+        height: 160,
+        child: Stack(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isCompleted
+                    ? AppColors.success.withAlpha(26)
+                    : AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: isCompleted
+                    ? Border.all(color: AppColors.success, width: 2)
+                    : null,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(13),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Icon
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isCompleted
+                          ? AppColors.success.withAlpha(26)
+                          : AppColors.primary.withAlpha(26),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      MissionIcons.getIcon(mission.icon),
+                      color: isCompleted ? AppColors.success : AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Name
+                  Text(
+                    mission.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isCompleted
+                          ? AppColors.success
+                          : AppColors.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  // Mini progress bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: SizedBox(
+                      height: 6,
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: AppColors.xpBarBackground,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isCompleted ? AppColors.success : AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // XP badge
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.star_rounded,
+                        color: AppColors.secondary,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '+${mission.xpReward} XP',
+                        style: const TextStyle(
+                          color: AppColors.secondary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Type chip (top-right corner)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: _buildCompactTypeChip(),
+            ),
+            // Completed checkmark overlay
+            if (isCompleted)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: const BoxDecoration(
+                    color: AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTypeChip() {
+    Color chipColor;
+    String label;
+    switch (mission.type) {
+      case MissionType.daily:
+        chipColor = AppColors.primary;
+        label = 'D';
+        break;
+      case MissionType.weekly:
+        chipColor = AppColors.secondary;
+        label = 'S';
+        break;
+      case MissionType.event:
+        chipColor = AppColors.warning;
+        label = 'E';
+        break;
+    }
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        color: chipColor.withAlpha(40),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(
+            color: chipColor,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFull(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       onDoubleTap: () {

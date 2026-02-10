@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
 import 'services/database_service.dart';
 import 'services/location_service.dart';
 import 'services/gamification_service.dart';
@@ -7,12 +10,18 @@ import 'screens/dashboard_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/map_screen.dart';
+import 'screens/login_screen.dart';
 import 'utils/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize database
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Initialize local database (Hive)
   await DatabaseService.init();
 
   runApp(const RushApp());
@@ -32,14 +41,67 @@ class RushApp extends StatelessWidget {
         title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        home: const AppInitializer(),
+        home: const AuthWrapper(),
       ),
     );
   }
 }
 
+/// Wrapper that listens to Firebase Auth state and shows the appropriate screen
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Loading state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.directions_run,
+                    size: 64,
+                    color: AppColors.primary,
+                  ),
+                  SizedBox(height: 24),
+                  Text(
+                    'RUSH',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  SizedBox(height: 32),
+                  CircularProgressIndicator(color: AppColors.primary),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // User is logged in
+        if (snapshot.hasData && snapshot.data != null) {
+          return AppInitializer(user: snapshot.data!);
+        }
+
+        // User is not logged in
+        return const LoginScreen();
+      },
+    );
+  }
+}
+
 class AppInitializer extends StatefulWidget {
-  const AppInitializer({super.key});
+  final User user;
+
+  const AppInitializer({super.key, required this.user});
 
   @override
   State<AppInitializer> createState() => _AppInitializerState();
@@ -62,115 +124,20 @@ class _AppInitializerState extends State<AppInitializer> {
     final gamification = context.read<GamificationService>();
 
     // Wait a bit for services to initialize
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 300));
 
-    // Check if user exists
-    if (gamification.user == null) {
-      // Show onboarding/registration
-      if (mounted) {
-        final name = await _showNameDialog();
-        if (name != null && name.isNotEmpty) {
-          await gamification.ensureUser(name);
-        }
-      }
-    }
+    // Ensure local user exists with Firebase user's name
+    final displayName =
+        widget.user.displayName ??
+        widget.user.email?.split('@').first ??
+        'Runner';
+    await gamification.ensureUser(displayName);
 
     if (mounted) {
       setState(() {
         _isLoading = false;
       });
     }
-  }
-
-  Future<String?> _showNameDialog() async {
-    final controller = TextEditingController();
-
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Column(
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withAlpha(26),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.directions_run,
-                size: 48,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Bienvenido a RUSH!',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Run. Unlock. Share. Hustle.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                labelText: 'Tu nombre',
-                labelStyle: const TextStyle(color: AppColors.textSecondary),
-                filled: true,
-                fillColor: AppColors.background,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.primary),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                if (controller.text.trim().isNotEmpty) {
-                  Navigator.pop(context, controller.text.trim());
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'COMENZAR',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -234,13 +201,14 @@ class _MainNavigationState extends State<MainNavigation> {
   final List<Widget> _screens = const [
     DashboardScreen(),
     HistoryScreen(),
-    LeaderboardScreen(), // Social/Leaderboard
-    MapScreen(), // Map exploration
+    LeaderboardScreen(),
+    MapScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       backgroundColor: AppColors.background,
       body: _screens[_currentIndex],
       bottomNavigationBar: SafeArea(

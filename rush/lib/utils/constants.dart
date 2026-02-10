@@ -121,6 +121,20 @@ class AppTheme {
           color: AppColors.textPrimary,
         ),
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        elevation: 6,
+        backgroundColor: AppColors.navBackground,
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.navBackground,
         selectedItemColor: AppColors.navSelected,
