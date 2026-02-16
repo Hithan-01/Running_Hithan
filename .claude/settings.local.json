@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(cmd /c tasklist)",
+      "Bash(findstr:*)"
+    ]
+  }
+}

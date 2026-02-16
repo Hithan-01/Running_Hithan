@@ -80,7 +80,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileHeader(String name, GamificationService gamification) {
     return GestureDetector(
-      onLongPress: () => _showEditNameDialog(context, name, gamification),
+      onTap: () => _showEditProfileSheet(context, gamification),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -169,84 +169,244 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showEditNameDialog(
+  static const List<String> _faculties = [
+    'Ingeniería y Tecnología',
+    'Ciencias de la Salud',
+    'Ciencias Administrativas',
+    'Educación',
+    'Teología',
+    'Artes y Comunicación',
+    'Otra',
+  ];
+
+  void _showEditProfileSheet(
     BuildContext context,
-    String currentName,
     GamificationService gamification,
   ) {
-    final controller = TextEditingController(text: currentName);
+    final user = gamification.user!;
+    final nameController = TextEditingController(text: user.name);
     final formKey = GlobalKey<FormState>();
+    String? selectedFaculty = user.faculty;
+    int? selectedSemester = user.semester;
+    final email = FirebaseAuth.instance.currentUser?.email ?? '';
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text(
-          'Editar Nombre',
-          style: TextStyle(color: AppColors.textPrimary),
-        ),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: controller,
-            autofocus: true,
-            style: const TextStyle(color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              labelText: 'Nuevo nombre',
-              labelStyle: const TextStyle(color: AppColors.textSecondary),
-              filled: true,
-              fillColor: AppColors.background,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.error),
-              ),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'El nombre no puede estar vacio';
-              }
-              if (value.trim().length < 2) {
-                return 'El nombre debe tener al menos 2 caracteres';
-              }
-              if (value.trim().length > 30) {
-                return 'El nombre es demasiado largo';
-              }
-              return null;
-            },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancelar',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                gamification.updateUserName(controller.text.trim());
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Nombre actualizado'),
-                    backgroundColor: AppColors.success,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.textMuted.withAlpha(77),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+                  const SizedBox(height: 20),
+
+                  // Title
+                  const Text(
+                    'Editar Perfil',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Email (read-only)
+                  TextFormField(
+                    initialValue: email,
+                    readOnly: true,
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 14,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Correo electrónico',
+                      labelStyle: const TextStyle(color: AppColors.textSecondary),
+                      prefixIcon: const Icon(
+                        Icons.email_outlined,
+                        color: AppColors.textMuted,
+                      ),
+                      suffixIcon: const Icon(
+                        Icons.lock_outline_rounded,
+                        color: AppColors.textMuted,
+                        size: 18,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Name
+                  TextFormField(
+                    controller: nameController,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: 'Nombre',
+                      labelStyle: const TextStyle(color: AppColors.textSecondary),
+                      prefixIcon: const Icon(
+                        Icons.person_outline,
+                        color: AppColors.textSecondary,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'El nombre no puede estar vacío';
+                      }
+                      if (value.trim().length < 2) {
+                        return 'El nombre debe tener al menos 2 caracteres';
+                      }
+                      if (value.trim().length > 30) {
+                        return 'El nombre es demasiado largo';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Faculty dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedFaculty,
+                    decoration: InputDecoration(
+                      labelText: 'Facultad',
+                      labelStyle: const TextStyle(color: AppColors.textSecondary),
+                      prefixIcon: const Icon(
+                        Icons.school_outlined,
+                        color: AppColors.textSecondary,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    dropdownColor: AppColors.surface,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: _faculties
+                        .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+                        .toList(),
+                    onChanged: (value) =>
+                        setModalState(() => selectedFaculty = value),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Semester dropdown
+                  DropdownButtonFormField<int>(
+                    value: selectedSemester,
+                    decoration: InputDecoration(
+                      labelText: 'Semestre',
+                      labelStyle: const TextStyle(color: AppColors.textSecondary),
+                      prefixIcon: const Icon(
+                        Icons.calendar_today_outlined,
+                        color: AppColors.textSecondary,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    dropdownColor: AppColors.surface,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: List.generate(
+                      10,
+                      (i) => DropdownMenuItem(
+                        value: i + 1,
+                        child: Text('${i + 1}° Semestre'),
+                      ),
+                    ),
+                    onChanged: (value) =>
+                        setModalState(() => selectedSemester = value),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Save button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (formKey.currentState!.validate()) {
+                          gamification.updateUserProfile(
+                            name: nameController.text.trim(),
+                            faculty: selectedFaculty,
+                            semester: selectedSemester,
+                          );
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Perfil actualizado'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Guardar',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
             ),
-            child: const Text('Guardar'),
           ),
-        ],
+        ),
       ),
     );
   }

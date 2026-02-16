@@ -193,6 +193,20 @@ class GamificationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Update user profile (name, faculty, semester)
+  Future<void> updateUserProfile({
+    required String name,
+    String? faculty,
+    int? semester,
+  }) async {
+    if (_user == null) return;
+    _user!.name = name;
+    _user!.faculty = faculty;
+    _user!.semester = semester;
+    await DatabaseService.updateUser(_user!);
+    notifyListeners();
+  }
+
   // Process completed run
   Future<RunResult> processRun(Run run) async {
     if (_user == null) throw Exception('No user found');
