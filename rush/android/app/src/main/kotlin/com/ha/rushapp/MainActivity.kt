@@ -1,4 +1,4 @@
-package com.example.rush
+package com.ha.rushapp
 
 import io.flutter.embedding.android.FlutterActivity
 
