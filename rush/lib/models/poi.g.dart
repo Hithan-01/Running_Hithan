@@ -20,10 +20,10 @@ class PoiAdapter extends TypeAdapter<Poi> {
       id: fields[0] as String,
       name: fields[1] as String,
       description: fields[2] as String,
-      latitude: fields[3] as double,
-      longitude: fields[4] as double,
-      categoryIndex: fields[5] as int,
-      xpReward: fields[6] as int,
+      latitude: (fields[3] as num).toDouble(),
+      longitude: (fields[4] as num).toDouble(),
+      categoryIndex: (fields[5] as num).toInt(),
+      xpReward: (fields[6] as num).toInt(),
       icon: fields[7] as String,
     );
   }

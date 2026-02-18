@@ -20,10 +20,10 @@ class MissionAdapter extends TypeAdapter<Mission> {
       id: fields[0] as String,
       name: fields[1] as String,
       description: fields[2] as String,
-      typeIndex: fields[3] as int,
-      goalTypeIndex: fields[4] as int,
-      goalValue: fields[5] as int,
-      xpReward: fields[6] as int,
+      typeIndex: (fields[3] as num).toInt(),
+      goalTypeIndex: (fields[4] as num).toInt(),
+      goalValue: (fields[5] as num).toInt(),
+      xpReward: (fields[6] as num).toInt(),
       icon: fields[7] as String,
     );
   }
@@ -74,7 +74,7 @@ class ActiveMissionAdapter extends TypeAdapter<ActiveMission> {
     return ActiveMission(
       oderId: fields[0] as String,
       missionId: fields[1] as String,
-      currentProgress: fields[2] as int,
+      currentProgress: (fields[2] as num).toInt(),
       isCompleted: fields[3] as bool,
       assignedAt: fields[4] as DateTime,
       completedAt: fields[5] as DateTime?,

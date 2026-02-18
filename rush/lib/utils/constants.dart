@@ -152,7 +152,13 @@ class AppConstants {
   // Map defaults (Universidad de Montemorelos coordinates)
   static const double defaultLatitude = 25.1935;
   static const double defaultLongitude = -99.8270;
-  static const double defaultZoom = 16.0;
+  static const double defaultZoom = 17.0;
+
+  // Campus bounds (SW corner → NE corner) with padding
+  static const double campusSWLat = 25.1905;
+  static const double campusSWLon = -99.8310;
+  static const double campusNELat = 25.1965;
+  static const double campusNELon = -99.8230;
 
   // Gamification
   static const int xpPerKm = 50;

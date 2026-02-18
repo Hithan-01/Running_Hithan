@@ -36,9 +36,9 @@ dependencies:
   # State Management
   provider: ^6.1.0
 
-  # Database
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
+  # Database (Hive Community Edition)
+  hive_ce: ^2.7.0
+  hive_ce_flutter: ^2.1.0
 
   # Maps & Location
   flutter_map: ^8.2.2
@@ -67,8 +67,8 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-  # Hive code generation
-  hive_generator: ^2.0.1
+  # Hive CE code generation
+  hive_ce_generator: ^1.4.0
   build_runner: ^2.4.6
 
 # For information on the generic Dart part of this file, see the

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,9 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../services/location_service.dart';
 import '../services/gamification_service.dart';
-import '../models/poi.dart';
 import '../widgets/run_stats_panel.dart';
-import '../widgets/poi_marker.dart';
 import '../utils/constants.dart';
 import 'run_summary_screen.dart';
 import '../models/run_model.dart';
@@ -25,8 +24,8 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
-  Poi? _selectedPoi;
   bool _isStarting = false;
+  bool _followUser = true; // auto-follow during tracking
 
   @override
   void initState() {
@@ -36,7 +35,13 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _initLocation() async {
     final locationService = context.read<LocationService>();
-    await locationService.getCurrentPosition();
+    final pos = await locationService.getCurrentPosition();
+    if (pos != null) {
+      _mapController.move(
+        LatLng(pos.latitude, pos.longitude),
+        AppConstants.defaultZoom,
+      );
+    }
   }
 
   @override
@@ -58,9 +63,6 @@ class _MapScreenState extends State<MapScreen> {
               // My location FAB — bottom right
               _buildMyLocationButton(),
 
-              // POI info card
-              if (_selectedPoi != null) _buildPoiInfoOverlay(gamification),
-
               // Bottom controls
               _buildBottomControls(location, gamification),
             ],
@@ -79,23 +81,46 @@ class _MapScreenState extends State<MapScreen> {
             AppConstants.defaultLongitude,
           );
 
+    // Auto-follow user during tracking
+    if (location.isTracking && _followUser && currentPos != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _mapController.move(
+          LatLng(currentPos.latitude, currentPos.longitude),
+          _mapController.camera.zoom,
+        );
+      });
+    }
+
+    // Campus bounds — lock camera to university area
+    final campusBounds = LatLngBounds(
+      const LatLng(AppConstants.campusSWLat, AppConstants.campusSWLon),
+      const LatLng(AppConstants.campusNELat, AppConstants.campusNELon),
+    );
+
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
         initialCenter: center,
         initialZoom: AppConstants.defaultZoom,
-        onTap: (_, __) {
-          setState(() {
-            _selectedPoi = null;
-          });
+        minZoom: 15.5,
+        maxZoom: 19,
+        cameraConstraint: CameraConstraint.contain(bounds: campusBounds),
+        onTap: (_, __) {},
+        onPositionChanged: (pos, hasGesture) {
+          // If user manually drags the map, stop auto-follow
+          if (hasGesture) {
+            _followUser = false;
+          }
         },
       ),
       children: [
-        // OpenStreetMap tiles
+        // CartoDB Voyager — buildings, parks, colored landmarks
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
           userAgentPackageName: 'com.aerdr.rush',
           maxZoom: 19,
+          retinaMode: true,
         ),
 
         // Route polyline
@@ -106,78 +131,89 @@ class _MapScreenState extends State<MapScreen> {
                 points: location.routePoints
                     .map((p) => LatLng(p.latitude, p.longitude))
                     .toList(),
-                color: AppColors.accent,
-                strokeWidth: 5,
+                color: AppColors.primary,
+                strokeWidth: 6,
+                borderColor: AppColors.primary.withAlpha(60),
+                borderStrokeWidth: 3,
               ),
             ],
           ),
 
-        // Current location marker
+        // Current location marker with direction arrow
         if (currentPos != null)
           MarkerLayer(
             markers: [
               Marker(
                 point: LatLng(currentPos.latitude, currentPos.longitude),
-                width: 30,
-                height: 30,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withAlpha(100),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
+                width: 44,
+                height: 44,
+                child: _buildLocationMarker(location),
               ),
             ],
           ),
 
-        // POI markers
-        MarkerLayer(markers: _buildPoiMarkers(gamification)),
+        // POI markers hidden — detection still works via LocationService
       ],
     );
   }
 
-  List<Marker> _buildPoiMarkers(GamificationService gamification) {
-    return CampusPois.all.map((poi) {
-      final isVisited = gamification.isPoiVisited(poi.id);
+  /// Computes heading in radians from the last two route points.
+  double? _computeHeading(LocationService location) {
+    final points = location.routePoints;
+    if (points.length < 2) return null;
+    final p1 = points[points.length - 2];
+    final p2 = points.last;
+    final dLon = (p2.longitude - p1.longitude) * math.pi / 180;
+    final lat1 = p1.latitude * math.pi / 180;
+    final lat2 = p2.latitude * math.pi / 180;
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+    return math.atan2(y, x); // radians, 0 = north
+  }
 
-      return Marker(
-        point: LatLng(poi.latitude, poi.longitude),
-        width: 50,
-        height: 50,
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedPoi = poi;
-            });
-          },
+  Widget _buildLocationMarker(LocationService location) {
+    final heading = _computeHeading(location);
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Pulsing glow ring
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.primary.withAlpha(40),
+          ),
+        ),
+        // Arrow — rotates with heading, points up by default
+        Transform.rotate(
+          angle: heading ?? 0,
           child: Container(
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: isVisited ? AppColors.success : AppColors.secondary,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
+              color: AppColors.primary,
+              border: Border.all(color: Colors.white, width: 3),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withAlpha(50),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+                  color: AppColors.primary.withAlpha(120),
+                  blurRadius: 10,
+                  spreadRadius: 2,
                 ),
               ],
             ),
-            child: Center(
-              child: Text(poi.icon, style: const TextStyle(fontSize: 20)),
+            child: const Icon(
+              Icons.navigation_rounded,
+              color: Colors.white,
+              size: 20,
             ),
           ),
         ),
-      );
-    }).toList();
+      ],
+    );
   }
 
   Widget _buildTopBar(LocationService location) {
@@ -240,6 +276,7 @@ class _MapScreenState extends State<MapScreen> {
     final location = context.read<LocationService>();
     final pos = location.currentPosition ?? await location.getCurrentPosition();
     if (pos != null) {
+      _followUser = true; // re-enable auto-follow
       _mapController.move(
         LatLng(pos.latitude, pos.longitude),
         _mapController.camera.zoom,
@@ -263,22 +300,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildPoiInfoOverlay(GamificationService gamification) {
-    return Positioned(
-      bottom: 140,
-      left: 16,
-      right: 16,
-      child: PoiInfoCard(
-        poi: _selectedPoi!,
-        isVisited: gamification.isPoiVisited(_selectedPoi!.id),
-        onClose: () {
-          setState(() {
-            _selectedPoi = null;
-          });
-        },
-      ),
-    );
-  }
 
   Widget _buildBottomControls(
     LocationService location,

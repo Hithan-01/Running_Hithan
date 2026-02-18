@@ -21,8 +21,8 @@ class AchievementAdapter extends TypeAdapter<Achievement> {
       name: fields[1] as String,
       description: fields[2] as String,
       icon: fields[3] as String,
-      xpReward: fields[4] as int,
-      categoryIndex: fields[5] as int,
+      xpReward: (fields[4] as num).toInt(),
+      categoryIndex: (fields[5] as num).toInt(),
     );
   }
 

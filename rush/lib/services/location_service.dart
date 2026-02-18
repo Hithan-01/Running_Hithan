@@ -24,6 +24,7 @@ class LocationService extends ChangeNotifier {
   // POI detection
   final Set<String> _visitedPoisThisRun = {};
   Function(Poi)? onPoiVisited;
+  bool _poiCheckEnabled = false;
 
   // Getters
   bool get isTracking => _isTracking;
@@ -114,7 +115,13 @@ class LocationService extends ChangeNotifier {
     _duration = 0;
     _routePoints = [];
     _visitedPoisThisRun.clear();
+    _poiCheckEnabled = false;
     _startTime = DateTime.now();
+
+    // Delay POI checks so countdown audio finishes first
+    Future.delayed(const Duration(seconds: 5), () {
+      _poiCheckEnabled = true;
+    });
 
     // Start duration timer
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -178,6 +185,7 @@ class LocationService extends ChangeNotifier {
   }
 
   void _checkPoiProximity(Position position) {
+    if (!_poiCheckEnabled) return;
     for (final poi in CampusPois.all) {
       if (_visitedPoisThisRun.contains(poi.id)) continue;
 

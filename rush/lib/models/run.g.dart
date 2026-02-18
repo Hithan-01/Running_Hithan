@@ -19,11 +19,11 @@ class RunAdapter extends TypeAdapter<Run> {
     return Run(
       id: fields[0] as String,
       oderId: fields[1] as String,
-      distance: fields[2] as int,
-      duration: fields[3] as int,
-      avgPace: fields[4] as double,
+      distance: (fields[2] as num).toInt(),
+      duration: (fields[3] as num).toInt(),
+      avgPace: (fields[4] as num).toDouble(),
       route: (fields[5] as List).cast<RunPoint>(),
-      xpEarned: fields[6] as int,
+      xpEarned: (fields[6] as num).toInt(),
       poisVisited: (fields[7] as List).cast<String>(),
       achievementsUnlocked: (fields[8] as List).cast<String>(),
       createdAt: fields[9] as DateTime,
@@ -81,8 +81,8 @@ class RunPointAdapter extends TypeAdapter<RunPoint> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return RunPoint(
-      latitude: fields[0] as double,
-      longitude: fields[1] as double,
+      latitude: (fields[0] as num).toDouble(),
+      longitude: (fields[1] as num).toDouble(),
       timestamp: fields[2] as DateTime,
     );
   }
