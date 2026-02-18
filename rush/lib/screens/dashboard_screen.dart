@@ -6,8 +6,10 @@ import '../widgets/circular_step_gauge.dart';
 import '../widgets/mission_card.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
+import '../services/database_service.dart';
 import 'map_screen.dart';
 import 'missions_screen.dart';
+import 'notification_center_screen.dart';
 import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -94,11 +96,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Notification icon - just the icon, no container
-          const Icon(
-            Icons.notifications_outlined,
-            color: AppColors.textPrimary,
-            size: 26,
+          // Notification icon with unread badge
+          GestureDetector(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const NotificationCenterScreen(),
+                ),
+              );
+              if (context.mounted) setState(() {});
+            },
+            child: _buildBellIcon(gamification),
           ),
 
           // Center badges (XP, Rank, Streak)
@@ -125,11 +134,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           // Profile avatar
           GestureDetector(
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ProfileScreen()),
               );
+              if (context.mounted) setState(() {});
             },
             child: Container(
               width: 42,
@@ -153,6 +163,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBellIcon(GamificationService gamification) {
+    final userId = gamification.user?.id;
+    final unreadCount =
+        userId != null ? DatabaseService.getUnreadCount(userId) : 0;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(
+          Icons.notifications_outlined,
+          color: AppColors.textPrimary,
+          size: 26,
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            top: -4,
+            right: -4,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppColors.error,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              child: Text(
+                unreadCount > 9 ? '9+' : '$unreadCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 

@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
 import '../services/gamification_service.dart';
+import '../services/notification_service.dart';
+import '../services/database_service.dart';
+import '../services/audio_coach_service.dart';
 import '../models/achievement.dart';
+import '../models/notification_item.dart';
 import '../widgets/xp_bar.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
@@ -66,6 +71,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 // Achievements
                 _buildAchievementsSection(gamification),
+                const SizedBox(height: 24),
+
+                // Notification settings
+                _buildNotificationSettings(gamification),
                 const SizedBox(height: 24),
 
                 // Dev tools (temporary for testing)
@@ -841,6 +850,171 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildNotificationSettings(GamificationService gamification) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(13),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Notificaciones',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildNotificationToggle(
+            icon: Icons.wb_sunny_rounded,
+            color: AppColors.warning,
+            label: 'Motivacion matutina',
+            subtitle: 'Recordatorio diario a las 8:00 AM',
+            prefKey: NotificationService.morningKey,
+            gamification: gamification,
+          ),
+          const Divider(height: 24),
+          _buildNotificationToggle(
+            icon: Icons.flag_rounded,
+            color: AppColors.secondary,
+            label: 'Misiones diarias',
+            subtitle: 'Aviso de nuevas misiones a las 8:30 AM',
+            prefKey: NotificationService.missionsKey,
+            gamification: gamification,
+          ),
+          const Divider(height: 24),
+          _buildNotificationToggle(
+            icon: Icons.local_fire_department_rounded,
+            color: AppColors.error,
+            label: 'Alerta de racha',
+            subtitle: 'Recordatorio a las 8:00 PM si no has corrido',
+            prefKey: NotificationService.streakKey,
+            gamification: gamification,
+          ),
+          const Divider(height: 24),
+          _buildVoiceCoachToggle(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationToggle({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String subtitle,
+    required String prefKey,
+    required GamificationService gamification,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withAlpha(26),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: NotificationService.isEnabled(prefKey),
+          onChanged: (value) async {
+            await NotificationService.setEnabled(prefKey, value);
+            if (gamification.user != null) {
+              await NotificationService.scheduleAllNotifications(
+                gamification.user!,
+              );
+            }
+            setState(() {});
+          },
+          activeTrackColor: AppColors.primary,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVoiceCoachToggle() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.success.withAlpha(26),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.record_voice_over_rounded, color: AppColors.success, size: 22),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Entrenador de voz',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                'Indicaciones de audio durante la carrera',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: AudioCoachService.isEnabled,
+          onChanged: (value) {
+            AudioCoachService.setEnabled(value);
+            setState(() {});
+          },
+          activeTrackColor: AppColors.primary,
+        ),
+      ],
+    );
+  }
+
   Widget _buildDevTools(GamificationService gamification) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -913,6 +1087,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final userId = gamification.user?.id;
+                if (userId == null) return;
+                final types = ['streak', 'achievement', 'mission', 'level_up'];
+                final titles = {
+                  'streak': 'Racha de 5 dias!',
+                  'achievement': 'Logro desbloqueado!',
+                  'mission': 'Mision completada!',
+                  'level_up': 'Subiste de nivel!',
+                };
+                final bodies = {
+                  'streak': 'Llevas 5 dias corriendo sin parar. Sigue asi!',
+                  'achievement': 'Has desbloqueado "Explorador Universitario".',
+                  'mission': 'Completaste la mision "Corre 2km hoy".',
+                  'level_up': 'Ahora eres nivel ${(gamification.user?.level ?? 1) + 1}!',
+                };
+                final type = types[DateTime.now().second % types.length];
+                final item = NotificationItem(
+                  id: const Uuid().v4(),
+                  userId: userId,
+                  title: titles[type]!,
+                  body: bodies[type]!,
+                  type: type,
+                  createdAt: DateTime.now(),
+                );
+                await DatabaseService.addNotificationItem(item);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Notificacion "$type" creada')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.notifications_active_rounded, size: 18),
+              label: const Text('Mock Notification', style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.warning,
+                side: const BorderSide(color: AppColors.warning),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
           ),
         ],
       ),

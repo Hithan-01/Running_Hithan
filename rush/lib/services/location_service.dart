@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/run.dart';
 import '../models/poi.dart';
+import 'audio_coach_service.dart';
 
 class LocationService extends ChangeNotifier {
   StreamSubscription<Position>? _positionSubscription;
@@ -152,7 +153,12 @@ class LocationService extends ChangeNotifier {
 
       // Only add if moved significantly (filter GPS noise)
       if (distanceFromLast >= 3) {
+        final prevKm = _distance ~/ 1000;
         _distance += distanceFromLast.round();
+        final newKm = _distance ~/ 1000;
+        if (newKm > prevKm) {
+          AudioCoachService.distanceMilestone(newKm);
+        }
       }
     }
 
@@ -185,6 +191,7 @@ class LocationService extends ChangeNotifier {
       if (distance <= Poi.visitRadius) {
         _visitedPoisThisRun.add(poi.id);
         onPoiVisited?.call(poi);
+        AudioCoachService.poiVisited(poi.name);
         debugPrint('POI visited: ${poi.name}');
       }
     }

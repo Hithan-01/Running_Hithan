@@ -4,6 +4,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'services/database_service.dart';
+import 'services/notification_service.dart';
+import 'services/audio_coach_service.dart';
 import 'services/location_service.dart';
 import 'services/gamification_service.dart';
 import 'screens/dashboard_screen.dart';
@@ -23,6 +25,12 @@ void main() async {
 
   // Initialize local database (Hive)
   await DatabaseService.init();
+
+  // Initialize notifications
+  await NotificationService.init();
+
+  // Initialize audio coach (TTS)
+  await AudioCoachService.init();
 
   runApp(const RushApp());
 }
@@ -132,6 +140,11 @@ class _AppInitializerState extends State<AppInitializer> {
         widget.user.email?.split('@').first ??
         'Runner';
     await gamification.ensureUser(displayName);
+
+    // Schedule notifications based on current user state
+    if (gamification.user != null) {
+      await NotificationService.scheduleAllNotifications(gamification.user!);
+    }
 
     if (mounted) {
       setState(() {

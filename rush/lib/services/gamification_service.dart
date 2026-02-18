@@ -7,7 +7,10 @@ import '../models/run.dart';
 import '../models/achievement.dart';
 import '../models/poi.dart';
 import '../models/mission.dart';
+import '../models/notification_item.dart';
+import 'package:uuid/uuid.dart';
 import 'database_service.dart';
+import 'notification_service.dart';
 import 'sync_service.dart';
 
 class GamificationService extends ChangeNotifier {
@@ -257,6 +260,11 @@ class GamificationService extends ChangeNotifier {
     if (_user!.level > previousLevel) {
       result.newLevel = _user!.level;
       onLevelUp?.call(_user!.level);
+      await _logNotification(
+        title: 'Subiste al nivel ${_user!.level}!',
+        body: 'Ahora eres ${_user!.levelName}. Sigue acumulando XP!',
+        type: 'level_up',
+      );
     }
 
     // Check achievements
@@ -269,6 +277,19 @@ class GamificationService extends ChangeNotifier {
 
     // Update mission progress
     await _updateMissionProgress(run);
+
+    // Reschedule notifications (streak reminder skips today since lastRunAt is now)
+    await NotificationService.scheduleAllNotifications(_user!);
+
+    // Celebrate streak if active
+    if (_user!.currentStreak >= 2) {
+      await NotificationService.showStreakCelebration(_user!.currentStreak);
+      await _logNotification(
+        title: 'Llevas ${_user!.currentStreak} dias de racha!',
+        body: 'Sigue asi! La consistencia es clave para subir de nivel.',
+        type: 'streak',
+      );
+    }
 
     notifyListeners();
     return result;
@@ -383,6 +404,11 @@ class GamificationService extends ChangeNotifier {
         _user!.addXp(achievement.xpReward);
         newlyUnlocked.add(achievement);
         onAchievementUnlocked?.call(achievement);
+        await _logNotification(
+          title: 'Logro desbloqueado: ${achievement.name}',
+          body: '${achievement.description} (+${achievement.xpReward} XP)',
+          type: 'achievement',
+        );
       }
     }
 
@@ -424,6 +450,11 @@ class GamificationService extends ChangeNotifier {
         _user!.addXp(mission.xpReward);
         await DatabaseService.updateUser(_user!);
         onMissionCompleted?.call(activeMission, mission);
+        await _logNotification(
+          title: 'Mision completada: ${mission.name}',
+          body: '${mission.description} (+${mission.xpReward} XP)',
+          type: 'mission',
+        );
       } else {
         await DatabaseService.updateMissionProgress(activeMission);
       }
@@ -464,6 +495,24 @@ class GamificationService extends ChangeNotifier {
 
   // Get visited POI count
   int get visitedPoiCount => _visitedPoiIds.length;
+
+  // Log an in-app notification to the activity feed
+  Future<void> _logNotification({
+    required String title,
+    required String body,
+    required String type,
+  }) async {
+    if (_user == null) return;
+    final item = NotificationItem(
+      id: const Uuid().v4(),
+      userId: _user!.id,
+      title: title,
+      body: body,
+      type: type,
+      createdAt: DateTime.now(),
+    );
+    await DatabaseService.addNotificationItem(item);
+  }
 
   // Get user stats
   Map<String, dynamic> getStats() {

@@ -13,6 +13,7 @@ import '../utils/constants.dart';
 import 'run_summary_screen.dart';
 import '../models/run_model.dart';
 import '../services/sync_service.dart';
+import '../services/audio_coach_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class MapScreen extends StatefulWidget {
@@ -290,9 +291,6 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildStartControls(LocationService location, GamificationService gamification) {
-    final visitedCount = gamification.visitedPoiCount;
-    final totalCount = CampusPois.all.length;
-
     return Positioned(
       bottom: MediaQuery.of(context).padding.bottom + 24,
       left: 0,
@@ -300,45 +298,6 @@ class _MapScreenState extends State<MapScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // POI summary pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.navBackground.withAlpha(200),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('🗺 ', style: TextStyle(fontSize: 14)),
-                Text(
-                  '$visitedCount/$totalCount POIs visitados',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Subtitle pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black.withAlpha(90),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Text(
-              'Visita POIs para ganar XP',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
           // Large circular START button
           GestureDetector(
             onTap: _isStarting ? null : () => _startRun(location),
@@ -392,6 +351,10 @@ class _MapScreenState extends State<MapScreen> {
     setState(() => _isStarting = true);
 
     final started = await location.startTracking();
+
+    if (started) {
+      AudioCoachService.countdown();
+    }
 
     setState(() => _isStarting = false);
 
@@ -530,6 +493,9 @@ class _MapScreenState extends State<MapScreen> {
       }
       return;
     }
+
+    // Announce run complete via TTS
+    AudioCoachService.runComplete(run.distanceKm);
 
     // Process run with gamification
     final result = await gamification.processRun(run);

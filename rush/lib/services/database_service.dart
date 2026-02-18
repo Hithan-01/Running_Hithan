@@ -5,6 +5,7 @@ import '../models/run.dart';
 import '../models/achievement.dart';
 import '../models/poi.dart';
 import '../models/mission.dart';
+import '../models/notification_item.dart';
 
 class DatabaseService {
   static const String userBoxName = 'users';
@@ -12,12 +13,14 @@ class DatabaseService {
   static const String achievementBoxName = 'achievements';
   static const String poiBoxName = 'visited_pois';
   static const String missionBoxName = 'active_missions';
+  static const String notificationBoxName = 'notification_history';
 
   static late Box<User> _userBox;
   static late Box<Run> _runBox;
   static late Box<UnlockedAchievement> _achievementBox;
   static late Box<VisitedPoi> _poiBox;
   static late Box<ActiveMission> _missionBox;
+  static late Box<NotificationItem> _notificationBox;
 
   // Initialize Hive and open all boxes
   static Future<void> init() async {
@@ -33,6 +36,7 @@ class DatabaseService {
     Hive.registerAdapter(VisitedPoiAdapter());
     Hive.registerAdapter(MissionAdapter());
     Hive.registerAdapter(ActiveMissionAdapter());
+    Hive.registerAdapter(NotificationItemAdapter());
 
     // Open boxes
     _userBox = await Hive.openBox<User>(userBoxName);
@@ -40,6 +44,7 @@ class DatabaseService {
     _achievementBox = await Hive.openBox<UnlockedAchievement>(achievementBoxName);
     _poiBox = await Hive.openBox<VisitedPoi>(poiBoxName);
     _missionBox = await Hive.openBox<ActiveMission>(missionBoxName);
+    _notificationBox = await Hive.openBox<NotificationItem>(notificationBoxName);
 
     debugPrint('Database initialized successfully');
   }
@@ -224,5 +229,33 @@ class DatabaseService {
       'poisVisited': pois.length,
       'achievementsUnlocked': achievements.length,
     };
+  }
+
+  // ============ NOTIFICATION HISTORY METHODS ============
+
+  static Future<void> addNotificationItem(NotificationItem item) async {
+    await _notificationBox.put(item.id, item);
+  }
+
+  static List<NotificationItem> getNotificationHistory(String userId) {
+    return _notificationBox.values
+        .where((n) => n.userId == userId)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  static int getUnreadCount(String userId) {
+    return _notificationBox.values
+        .where((n) => n.userId == userId && !n.isRead)
+        .length;
+  }
+
+  static Future<void> markAllAsRead(String userId) async {
+    final unread = _notificationBox.values
+        .where((n) => n.userId == userId && !n.isRead);
+    for (final item in unread) {
+      item.isRead = true;
+      await item.save();
+    }
   }
 }
