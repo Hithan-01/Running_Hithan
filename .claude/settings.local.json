@@ -4,7 +4,8 @@
       "Bash(find:*)",
       "Bash(flutter pub get:*)",
       "Bash(cmd /c tasklist)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(ls -la \"c:\\\\Users\\\\Dell\\\\Documents\\\\Running_Hithan\\\\rush\\\\lib\\\\models\"\" 2>/dev/null || echo \"Directory not found \")"
     ]
   }
 }

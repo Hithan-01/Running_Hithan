@@ -1,12 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import '../services/gamification_service.dart';
 import '../services/notification_service.dart';
 import '../services/database_service.dart';
 import '../services/audio_coach_service.dart';
-import '../models/achievement.dart';
 import '../models/notification_item.dart';
 import '../widgets/xp_bar.dart';
 import '../utils/constants.dart';
@@ -69,10 +72,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildStatsSection(gamification),
                 const SizedBox(height: 24),
 
-                // Achievements
-                _buildAchievementsSection(gamification),
-                const SizedBox(height: 24),
-
                 // Notification settings
                 _buildNotificationSettings(gamification),
                 const SizedBox(height: 24),
@@ -88,46 +87,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileHeader(String name, GamificationService gamification) {
-    return GestureDetector(
-      onTap: () => _showEditProfileSheet(context, gamification),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(13),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryDark],
-                ),
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.secondary, width: 3),
-              ),
-              child: Center(
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+    final photoPath = gamification.user?.photoPath;
+    final hasPhoto = photoPath != null && File(photoPath).existsSync();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(13),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Avatar with camera picker overlay
+          GestureDetector(
+            onTap: () => _pickPhoto(gamification),
+            child: Stack(
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    gradient: hasPhoto
+                        ? null
+                        : const LinearGradient(
+                            colors: [AppColors.primary, AppColors.primaryDark],
+                          ),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.secondary, width: 3),
+                  ),
+                  child: ClipOval(
+                    child: hasPhoto
+                        ? Image.file(
+                            File(photoPath),
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                          )
+                        : Center(
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
                   ),
                 ),
-              ),
+                // Camera icon overlay
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.surface, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
+          ),
+          const SizedBox(width: 16),
+          // Name & level — tap to edit
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _showEditProfileSheet(context, gamification),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -143,7 +184,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                       ),
-                      Icon(
+                      const Icon(
                         Icons.edit_rounded,
                         size: 18,
                         color: AppColors.textMuted,
@@ -172,10 +213,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickPhoto(GamificationService gamification) async {
+    final picker = ImagePicker();
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textMuted.withAlpha(77),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Foto de perfil',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(26),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
+              ),
+              title: const Text('Galería', style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withAlpha(26),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.camera_alt_rounded, color: AppColors.secondary),
+              ),
+              title: const Text('Cámara', style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
+
+    if (source == null || !mounted) return;
+
+    try {
+      final XFile? picked = await picker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      if (picked == null || !mounted) return;
+
+      final dir = await getApplicationDocumentsDirectory();
+      final fileName =
+          'profile_${DateTime.now().millisecondsSinceEpoch}${path.extension(picked.path)}';
+      final savedPath = path.join(dir.path, fileName);
+      await File(picked.path).copy(savedPath);
+
+      await gamification.updateUserPhoto(savedPath);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al seleccionar foto: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   static const List<String> _faculties = [
@@ -316,7 +450,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   // Faculty dropdown
                   DropdownButtonFormField<String>(
-                    value: selectedFaculty,
+                    initialValue: selectedFaculty,
                     decoration: InputDecoration(
                       labelText: 'Facultad',
                       labelStyle: const TextStyle(color: AppColors.textSecondary),
@@ -343,7 +477,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   // Semester dropdown
                   DropdownButtonFormField<int>(
-                    value: selectedSemester,
+                    initialValue: selectedSemester,
                     decoration: InputDecoration(
                       labelText: 'Semestre',
                       labelStyle: const TextStyle(color: AppColors.textSecondary),
@@ -658,191 +792,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: const TextStyle(
               fontSize: 12,
               color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAchievementsSection(GamificationService gamification) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Logros',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            childAspectRatio: 0.85,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: Achievements.all.length,
-          itemBuilder: (context, index) {
-            final achievement = Achievements.all[index];
-            final isUnlocked = gamification.isAchievementUnlocked(
-              achievement.id,
-            );
-
-            return GestureDetector(
-              onTap: () =>
-                  _showAchievementDialog(context, achievement, isUnlocked),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: isUnlocked
-                      ? Border.all(color: AppColors.secondary, width: 2)
-                      : null,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(13),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isUnlocked
-                            ? AppColors.secondary.withAlpha(26)
-                            : AppColors.textMuted.withAlpha(26),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isUnlocked
-                            ? AchievementIcons.getIcon(achievement.icon)
-                            : Icons.lock_rounded,
-                        size: 24,
-                        color: isUnlocked
-                            ? AppColors.secondary
-                            : AppColors.textMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        achievement.name,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                          color: isUnlocked
-                              ? AppColors.textPrimary
-                              : AppColors.textMuted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  void _showAchievementDialog(
-    BuildContext context,
-    Achievement achievement,
-    bool isUnlocked,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isUnlocked
-                    ? AppColors.secondary.withAlpha(26)
-                    : AppColors.textMuted.withAlpha(26),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isUnlocked
-                    ? AchievementIcons.getIcon(achievement.icon)
-                    : Icons.lock_rounded,
-                size: 48,
-                color: isUnlocked ? AppColors.secondary : AppColors.textMuted,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              achievement.name,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              achievement.description,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isUnlocked
-                    ? AppColors.success.withAlpha(26)
-                    : AppColors.secondary.withAlpha(26),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isUnlocked
-                        ? Icons.check_circle_rounded
-                        : Icons.star_rounded,
-                    color: isUnlocked ? AppColors.success : AppColors.secondary,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    isUnlocked ? 'Desbloqueado' : '+${achievement.xpReward} XP',
-                    style: TextStyle(
-                      color: isUnlocked
-                          ? AppColors.success
-                          : AppColors.secondary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cerrar',
-              style: TextStyle(color: AppColors.textSecondary),
             ),
           ),
         ],

@@ -27,7 +27,7 @@ class RunAdapter extends TypeAdapter<Run> {
       poisVisited: (fields[7] as List).cast<String>(),
       achievementsUnlocked: (fields[8] as List).cast<String>(),
       createdAt: fields[9] as DateTime,
-      isSynced: fields[10] as bool? ?? false,
+      isSynced: fields[10] as bool,
     );
   }
 
