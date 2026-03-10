@@ -10,8 +10,8 @@ import 'services/location_service.dart';
 import 'services/gamification_service.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/leaderboard_screen.dart';
-import 'screens/history_screen.dart';
-import 'screens/map_screen.dart';
+import 'screens/run_hub_screen.dart';
+import 'screens/achievements_screen.dart';
 import 'screens/login_screen.dart';
 import 'utils/constants.dart';
 
@@ -213,9 +213,9 @@ class _MainNavigationState extends State<MainNavigation> {
 
   final List<Widget> _screens = const [
     DashboardScreen(),
-    HistoryScreen(),
     LeaderboardScreen(),
-    MapScreen(),
+    RunHubScreen(),
+    AchievementsScreen(),
   ];
 
   @override
@@ -223,7 +223,10 @@ class _MainNavigationState extends State<MainNavigation> {
     return Scaffold(
       extendBody: true,
       backgroundColor: AppColors.background,
-      body: _screens[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
       bottomNavigationBar: SafeArea(
         child: Container(
           margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
@@ -264,19 +267,19 @@ class _MainNavigationState extends State<MainNavigation> {
                   label: 'Actividad',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.history_outlined),
-                  activeIcon: Icon(Icons.history, color: Colors.white),
-                  label: 'Historial',
+                  icon: Icon(Icons.leaderboard_outlined),
+                  activeIcon: Icon(Icons.leaderboard, color: Colors.white),
+                  label: 'Ranking',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.people_outline),
-                  activeIcon: Icon(Icons.people, color: Colors.white),
-                  label: 'Social',
+                  icon: Icon(Icons.directions_run_rounded),
+                  activeIcon: Icon(Icons.directions_run_rounded, color: Colors.white),
+                  label: 'Correr',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.map_outlined),
-                  activeIcon: Icon(Icons.map, color: Colors.white),
-                  label: 'Mapa',
+                  icon: Icon(Icons.emoji_events_outlined),
+                  activeIcon: Icon(Icons.emoji_events, color: Colors.white),
+                  label: 'Logros',
                 ),
               ],
             ),

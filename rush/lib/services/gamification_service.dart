@@ -210,6 +210,14 @@ class GamificationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Update profile photo path
+  Future<void> updateUserPhoto(String photoPath) async {
+    if (_user == null) return;
+    _user!.photoPath = photoPath;
+    await DatabaseService.updateUser(_user!);
+    notifyListeners();
+  }
+
   // Process completed run
   Future<RunResult> processRun(Run run) async {
     if (_user == null) throw Exception('No user found');

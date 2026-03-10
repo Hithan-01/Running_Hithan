@@ -30,13 +30,14 @@ class UserAdapter extends TypeAdapter<User> {
       bestStreak: (fields[10] as num).toInt(),
       createdAt: fields[11] as DateTime,
       lastRunAt: fields[12] as DateTime?,
+      photoPath: fields[13] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, User obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,7 +63,9 @@ class UserAdapter extends TypeAdapter<User> {
       ..writeByte(11)
       ..write(obj.createdAt)
       ..writeByte(12)
-      ..write(obj.lastRunAt);
+      ..write(obj.lastRunAt)
+      ..writeByte(13)
+      ..write(obj.photoPath);
   }
 
   @override

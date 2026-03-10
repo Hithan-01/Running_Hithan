@@ -43,6 +43,9 @@ class User extends HiveObject {
   @HiveField(12)
   DateTime? lastRunAt;
 
+  @HiveField(13)
+  String? photoPath;
+
   User({
     required this.id,
     required this.name,
@@ -57,6 +60,7 @@ class User extends HiveObject {
     this.bestStreak = 0,
     required this.createdAt,
     this.lastRunAt,
+    this.photoPath,
   });
 
   // XP needed for each level
