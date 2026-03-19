@@ -12,8 +12,77 @@ class LocationService extends ChangeNotifier {
   // Current state
   bool _isTracking = false;
   bool _isPaused = false;
+  bool _isSimulating = false;
   Position? _currentPosition;
   List<RunPoint> _routePoints = [];
+
+  // Simulation
+  Timer? _simTimer;
+  int _simIndex = 0;
+
+  // Campus polygon (GeoJSON lon/lat → lat/lon) for geofencing
+  static const List<(double, double)> _campusPolygon = [
+    (25.193454, -99.849642),
+    (25.190099, -99.847830),
+    (25.190066, -99.847812),
+    (25.189884, -99.847682),
+    (25.189823, -99.847574),
+    (25.189828, -99.847324),
+    (25.189788, -99.846088),
+    (25.190017, -99.845961),
+    (25.190604, -99.846306),
+    (25.190791, -99.845869),
+    (25.191343, -99.844767),
+    (25.191974, -99.843432),
+    (25.192409, -99.842514),
+    (25.193715, -99.839642),
+    (25.194741, -99.840221),
+    (25.194447, -99.840937),
+    (25.194417, -99.841231),
+    (25.193852, -99.842443),
+    (25.194750, -99.843165),
+    (25.195446, -99.843558),
+    (25.195504, -99.843570),
+    (25.194758, -99.845289),
+    (25.193436, -99.848425),
+    (25.193871, -99.848667),
+    (25.193822, -99.848795),
+    (25.193454, -99.849642),
+  ];
+
+  // Circular simulation route around campus center
+  static List<(double, double)> _buildSimRoute() {
+    const centerLat = 25.19266;
+    const centerLon = -99.84588;
+    const radiusM = 55.0;
+    const steps = 60;
+    final route = <(double, double)>[];
+    for (int i = 0; i <= steps; i++) {
+      final angle = (i / steps) * 2 * pi;
+      final lat = centerLat + (radiusM / 111000) * cos(angle);
+      final lon = centerLon + (radiusM / 100500) * sin(angle);
+      route.add((lat, lon));
+    }
+    return route;
+  }
+
+  static final List<(double, double)> _simRoute = _buildSimRoute();
+
+  bool _isInsideCampus(double lat, double lon) {
+    int crossings = 0;
+    final poly = _campusPolygon;
+    for (int i = 0; i < poly.length - 1; i++) {
+      final lat1 = poly[i].$1;
+      final lon1 = poly[i].$2;
+      final lat2 = poly[i + 1].$1;
+      final lon2 = poly[i + 1].$2;
+      if ((lat1 > lat) != (lat2 > lat) &&
+          lon < (lon2 - lon1) * (lat - lat1) / (lat2 - lat1) + lon1) {
+        crossings++;
+      }
+    }
+    return crossings.isOdd;
+  }
 
   // Run metrics
   int _distance = 0; // meters
@@ -29,6 +98,7 @@ class LocationService extends ChangeNotifier {
   // Getters
   bool get isTracking => _isTracking;
   bool get isPaused => _isPaused;
+  bool get isSimulating => _isSimulating;
   Position? get currentPosition => _currentPosition;
   List<RunPoint> get routePoints => List.unmodifiable(_routePoints);
   int get distance => _distance;
@@ -148,6 +218,9 @@ class LocationService extends ChangeNotifier {
   void _onPositionUpdate(Position position) {
     if (_isPaused) return;
 
+    // Geofencing: ignore positions outside campus
+    if (!_isInsideCampus(position.latitude, position.longitude)) return;
+
     // Calculate distance from last point
     if (_routePoints.isNotEmpty) {
       final lastPoint = _routePoints.last;
@@ -217,12 +290,60 @@ class LocationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Simulation mode — emulates running a circular loop inside campus
+  void startSimulation() {
+    if (_isTracking) return;
+    _isSimulating = true;
+    _isTracking = true;
+    _isPaused = false;
+    _simIndex = 0;
+    _distance = 0;
+    _duration = 0;
+    _routePoints = [];
+    _visitedPoisThisRun.clear();
+    _poiCheckEnabled = false;
+    _startTime = DateTime.now();
+
+    Future.delayed(const Duration(seconds: 5), () => _poiCheckEnabled = true);
+
+    _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!_isPaused) {
+        _duration++;
+        notifyListeners();
+      }
+    });
+
+    // Emit one position every 2 seconds (~5.8 m/step = ~10.5 km/h)
+    _simTimer = Timer.periodic(const Duration(milliseconds: 2000), (_) {
+      if (_isPaused) return;
+      final p = _simRoute[_simIndex % _simRoute.length];
+      _simIndex++;
+      _onPositionUpdate(Position(
+        latitude: p.$1,
+        longitude: p.$2,
+        timestamp: DateTime.now(),
+        accuracy: 4.0,
+        altitude: 1200.0,
+        heading: 0.0,
+        speed: 2.9,
+        speedAccuracy: 0.5,
+        altitudeAccuracy: 1.0,
+        headingAccuracy: 5.0,
+        isMocked: true,
+      ));
+    });
+
+    notifyListeners();
+  }
+
   // Stop tracking and return run data
   Run? stopTracking(String oderId, String runId) {
     if (!_isTracking) return null;
 
     _isTracking = false;
     _isPaused = false;
+    _isSimulating = false;
+    _simTimer?.cancel();
     _positionSubscription?.cancel();
     _durationTimer?.cancel();
 

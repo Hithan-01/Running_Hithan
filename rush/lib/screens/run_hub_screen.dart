@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -12,8 +13,10 @@ import '../services/audio_coach_service.dart';
 import '../services/sync_service.dart';
 import '../widgets/run_stats_panel.dart';
 import '../utils/constants.dart';
+import '../utils/secrets.dart';
 import '../utils/formatters.dart';
 import '../models/run_model.dart';
+import '../models/poi.dart';
 import 'run_summary_screen.dart';
 import 'history_screen.dart'; // RunDetailScreen
 
@@ -29,18 +32,17 @@ class _RunHubScreenState extends State<RunHubScreen>
   final MapController _mapController = MapController();
   late final AnimationController _panelAnim;
 
-  bool _isStarting = false;
-  bool _followUser = true;
-
-  static const double _sheetMax = 0.92;
-  static const double _stripH = 76.0;
-
   static final _campusBounds = LatLngBounds(
     const LatLng(AppConstants.campusSWLat, AppConstants.campusSWLon),
     const LatLng(AppConstants.campusNELat, AppConstants.campusNELon),
   );
-  static final _cameraConstraint =
-      CameraConstraint.contain(bounds: _campusBounds);
+
+  bool _isStarting = false;
+  bool _followUser = true;
+  bool _useSatellite = false;
+
+  static const double _sheetMax = 0.92;
+  static const double _stripH = 76.0;
 
   @override
   void initState() {
@@ -49,7 +51,6 @@ class _RunHubScreenState extends State<RunHubScreen>
       vsync: this,
       duration: const Duration(milliseconds: 320),
     );
-    _initLocation();
   }
 
   @override
@@ -67,16 +68,6 @@ class _RunHubScreenState extends State<RunHubScreen>
     }
   }
 
-  Future<void> _initLocation() async {
-    final loc = context.read<LocationService>();
-    final pos = await loc.getCurrentPosition();
-    if (pos != null && mounted) {
-      _mapController.move(
-        LatLng(pos.latitude, pos.longitude),
-        AppConstants.defaultZoom,
-      );
-    }
-  }
 
   // ─── Build ─────────────────────────────────────────────────────────────────
 
@@ -101,11 +92,18 @@ class _RunHubScreenState extends State<RunHubScreen>
               if (!isTracking)
                 _buildMyLocationFab(sheetOffset + 96),
 
+              // 3b · Satellite toggle
+              _buildMapStyleToggle(sheetOffset + 96),
+
               // 4 · Run controls
               if (isTracking)
                 _buildTrackingControls(location, gamification)
               else
                 _buildStartButton(location, sheetOffset + 24),
+
+              // 4b · Recenter FAB when user has panned away during tracking
+              if (isTracking && !_followUser)
+                _buildRecenterFab(),
 
               // 5 · History panel (idle only)
               if (!isTracking)
@@ -121,13 +119,9 @@ class _RunHubScreenState extends State<RunHubScreen>
 
   Widget _buildMap(LocationService location, GamificationService gamification) {
     final currentPos = location.currentPosition;
-    final center = currentPos != null
-        ? LatLng(currentPos.latitude, currentPos.longitude)
-        : const LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
-
     if (location.isTracking && _followUser && currentPos != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || !_followUser) return;
         _mapController.move(
           LatLng(currentPos.latitude, currentPos.longitude),
           _mapController.camera.zoom,
@@ -135,28 +129,87 @@ class _RunHubScreenState extends State<RunHubScreen>
       });
     }
 
-    return FlutterMap(
+    return Listener(
+      onPointerSignal: (event) {
+        if (event is PointerScrollEvent) {
+          final delta = event.scrollDelta.dy;
+          final zoomDelta = delta > 0 ? -0.5 : 0.5;
+          final newZoom =
+              (_mapController.camera.zoom + zoomDelta).clamp(14.0, 21.0);
+          _mapController.move(_mapController.camera.center, newZoom);
+        }
+      },
+      child: FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: center,
-        initialZoom: AppConstants.defaultZoom,
-        minZoom: 15.5,
-        maxZoom: 19,
-        cameraConstraint: _cameraConstraint,
+        initialCenter: const LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude),
+        initialZoom: 15.0,
+        minZoom: 14.0,
+        maxZoom: 21,
+        cameraConstraint: CameraConstraint.containCenter(
+          bounds: _campusBounds,
+        ),
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,
+        ),
         onTap: (tapPos, latLng) {},
         onPositionChanged: (_, hasGesture) {
-          if (hasGesture) _followUser = false;
+          if (hasGesture && _followUser) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _followUser = false);
+            });
+          }
         },
       ),
       children: [
         TileLayer(
-          urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
+          urlTemplate: _useSatellite
+              ? 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/512/{z}/{x}/{y}?access_token=${Secrets.mapboxToken}'
+              : 'https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/512/{z}/{x}/{y}?access_token=${Secrets.mapboxToken}',
+          tileDimension: 512,
+          zoomOffset: -1,
           userAgentPackageName: 'com.aerdr.rush',
-          maxZoom: 19,
-          retinaMode: true,
+          maxZoom: 21,
         ),
+        // Campus boundary polygon — Universidad de Montemorelos (GeoJSON exacto)
+        PolygonLayer(
+          polygons: [
+            Polygon(
+              points: const [
+                LatLng(25.193454, -99.849642),
+                LatLng(25.190099, -99.847830),
+                LatLng(25.190066, -99.847812),
+                LatLng(25.189884, -99.847682),
+                LatLng(25.189823, -99.847574),
+                LatLng(25.189828, -99.847324),
+                LatLng(25.189788, -99.846088),
+                LatLng(25.190017, -99.845961),
+                LatLng(25.190604, -99.846306),
+                LatLng(25.190791, -99.845869),
+                LatLng(25.191343, -99.844767),
+                LatLng(25.191974, -99.843432),
+                LatLng(25.192409, -99.842514),
+                LatLng(25.193715, -99.839642),
+                LatLng(25.194741, -99.840221),
+                LatLng(25.194447, -99.840937),
+                LatLng(25.194417, -99.841231),
+                LatLng(25.193852, -99.842443),
+                LatLng(25.194750, -99.843165),
+                LatLng(25.195446, -99.843558),
+                LatLng(25.195504, -99.843570),
+                LatLng(25.194758, -99.845289),
+                LatLng(25.193436, -99.848425),
+                LatLng(25.193871, -99.848667),
+                LatLng(25.193822, -99.848795),
+                LatLng(25.193454, -99.849642),
+              ],
+              color: AppColors.primary.withAlpha(20),
+              borderColor: AppColors.primary,
+              borderStrokeWidth: 2.5,
+            ),
+          ],
+        ),
+
         if (location.isTracking && location.routePoints.isNotEmpty)
           PolylineLayer(
             polylines: [
@@ -171,6 +224,21 @@ class _RunHubScreenState extends State<RunHubScreen>
               ),
             ],
           ),
+        // POI markers
+        MarkerLayer(
+          markers: CampusPois.all.map((poi) {
+            final isVisited = location.isTracking &&
+                location.visitedPoisThisRun.contains(poi.id);
+            return Marker(
+              point: LatLng(poi.latitude, poi.longitude),
+              width: 44,
+              height: 44,
+              child: _buildPoiMapMarker(poi, isVisited),
+            );
+          }).toList(),
+        ),
+
+        // Current location marker
         if (currentPos != null)
           MarkerLayer(
             markers: [
@@ -183,22 +251,30 @@ class _RunHubScreenState extends State<RunHubScreen>
             ],
           ),
       ],
+      ),
     );
   }
 
   Widget _buildLocationMarker(LocationService location) {
-    final points = location.routePoints;
+    final pos = location.currentPosition;
     double? heading;
-    if (points.length >= 2) {
-      final p1 = points[points.length - 2];
-      final p2 = points.last;
-      final dLon = (p2.longitude - p1.longitude) * math.pi / 180;
-      final lat1 = p1.latitude * math.pi / 180;
-      final lat2 = p2.latitude * math.pi / 180;
-      final y = math.sin(dLon) * math.cos(lat2);
-      final x = math.cos(lat1) * math.sin(lat2) -
-          math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
-      heading = math.atan2(y, x);
+    // Use GPS heading when tracking and sensor provides a valid fix (>= 0)
+    if (location.isTracking && pos != null && pos.heading >= 0) {
+      heading = pos.heading * math.pi / 180;
+    } else {
+      // Fall back to bearing computed from last two route points
+      final points = location.routePoints;
+      if (points.length >= 2) {
+        final p1 = points[points.length - 2];
+        final p2 = points.last;
+        final dLon = (p2.longitude - p1.longitude) * math.pi / 180;
+        final lat1 = p1.latitude * math.pi / 180;
+        final lat2 = p2.latitude * math.pi / 180;
+        final y = math.sin(dLon) * math.cos(lat2);
+        final x = math.cos(lat1) * math.sin(lat2) -
+            math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+        heading = math.atan2(y, x);
+      }
     }
 
     return Stack(
@@ -280,6 +356,34 @@ class _RunHubScreenState extends State<RunHubScreen>
     );
   }
 
+  Widget _buildMapStyleToggle(double bottomOffset) {
+    return Positioned(
+      bottom: bottomOffset,
+      left: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: _useSatellite ? AppColors.navBackground : AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(30),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IconButton(
+          onPressed: () => setState(() => _useSatellite = !_useSatellite),
+          icon: Icon(
+            _useSatellite ? Icons.map_rounded : Icons.satellite_alt_rounded,
+            color: _useSatellite ? Colors.white : AppColors.textPrimary,
+          ),
+          tooltip: _useSatellite ? 'Vista mapa' : 'Vista satélite',
+        ),
+      ),
+    );
+  }
+
   void _centerOnLocation() async {
     final loc = context.read<LocationService>();
     final pos = loc.currentPosition ?? await loc.getCurrentPosition();
@@ -303,6 +407,7 @@ class _RunHubScreenState extends State<RunHubScreen>
       child: Center(
         child: GestureDetector(
           onTap: _isStarting ? null : () => _startRun(location),
+          onLongPress: _isStarting ? null : () => _startSimulation(location),
           child: Container(
             width: 80,
             height: 80,
@@ -348,13 +453,53 @@ class _RunHubScreenState extends State<RunHubScreen>
     );
   }
 
+  void _startSimulation(LocationService location) {
+    if (!mounted) return;
+    _panelAnim.value = 0.0;
+    location.startSimulation();
+    setState(() => _followUser = true);
+  }
+
   Future<void> _startRun(LocationService location) async {
     if (!mounted) return;
     _panelAnim.value = 0.0;
     setState(() => _isStarting = true);
 
     final started = await location.startTracking();
-    if (started) AudioCoachService.countdown();
+    if (started) {
+      AudioCoachService.countdown();
+      setState(() => _followUser = true);
+      location.onPoiVisited = (poi) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Text(poi.icon, style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        '¡POI descubierto!',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      Text(
+                        '${poi.name}  ·  +${poi.xpReward} XP',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      };
+    }
 
     if (!mounted) return;
     setState(() => _isStarting = false);
@@ -441,6 +586,84 @@ class _RunHubScreenState extends State<RunHubScreen>
     );
   }
 
+  Color _poiCategoryColor(PoiCategory category) {
+    switch (category) {
+      case PoiCategory.academic:
+        return AppColors.poiAcademic;
+      case PoiCategory.sports:
+        return AppColors.poiSports;
+      case PoiCategory.landmark:
+        return AppColors.poiLandmark;
+    }
+  }
+
+  Widget _buildPoiMapMarker(Poi poi, bool visited) {
+    final color = _poiCategoryColor(poi.category);
+    return Stack(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          margin: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: visited ? AppColors.success.withAlpha(230) : color.withAlpha(220),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(70),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(poi.icon, style: const TextStyle(fontSize: 16)),
+          ),
+        ),
+        if (visited)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: const BoxDecoration(
+                color: AppColors.success,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 10),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRecenterFab() {
+    return Positioned(
+      bottom: 140,
+      right: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withAlpha(100),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IconButton(
+          onPressed: _centerOnLocation,
+          icon: const Icon(Icons.my_location, color: Colors.white),
+          tooltip: 'Recentrar',
+        ),
+      ),
+    );
+  }
+
   Future<void> _stopRun(
     LocationService location,
     GamificationService gamification,
@@ -472,6 +695,7 @@ class _RunHubScreenState extends State<RunHubScreen>
 
     final runId = const Uuid().v4();
     final run = location.stopTracking(user.id, runId);
+    location.onPoiVisited = null;
 
     if (run == null || run.distance < 50) {
       if (mounted) {
