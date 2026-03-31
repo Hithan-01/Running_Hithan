@@ -51,9 +51,8 @@ class DatabaseService {
 
   // ============ USER METHODS ============
 
-  static User? getCurrentUser() {
-    if (_userBox.isEmpty) return null;
-    return _userBox.values.first;
+  static User? getUser(String id) {
+    return _userBox.get(id);
   }
 
   static Future<User> createUser({
@@ -198,13 +197,46 @@ class DatabaseService {
 
   // Clear daily missions (call at midnight)
   static Future<void> clearDailyMissions(String oderId) async {
-    final dailyMissions = _missionBox.values.where((m) =>
+    final toDelete = _missionBox.values.where((m) =>
         m.oderId == oderId &&
-        Missions.getById(m.missionId)?.type == MissionType.daily);
-
-    for (final mission in dailyMissions) {
+        Missions.getById(m.missionId)?.type == MissionType.daily).toList();
+    for (final mission in toDelete) {
       await mission.delete();
     }
+  }
+
+  // Clear weekly missions (call on new week)
+  static Future<void> clearWeeklyMissions(String oderId) async {
+    final toDelete = _missionBox.values.where((m) =>
+        m.oderId == oderId &&
+        Missions.getById(m.missionId)?.type == MissionType.weekly).toList();
+    for (final mission in toDelete) {
+      await mission.delete();
+    }
+  }
+
+  // Returns the date when daily missions were last assigned (null if never)
+  static DateTime? getLastDailyAssignmentDate(String oderId) {
+    final missions = _missionBox.values.where((m) =>
+        m.oderId == oderId &&
+        Missions.getById(m.missionId)?.type == MissionType.daily);
+    if (missions.isEmpty) return null;
+    return missions.map((m) => m.assignedAt).reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
+  // Returns the date when weekly missions were last assigned (null if never)
+  static DateTime? getLastWeeklyAssignmentDate(String oderId) {
+    final missions = _missionBox.values.where((m) =>
+        m.oderId == oderId &&
+        Missions.getById(m.missionId)?.type == MissionType.weekly);
+    if (missions.isEmpty) return null;
+    return missions.map((m) => m.assignedAt).reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
+  static int getCompletedMissionsCount(String oderId) {
+    return _missionBox.values
+        .where((m) => m.oderId == oderId && m.isCompleted)
+        .length;
   }
 
   // ============ STATS METHODS ============

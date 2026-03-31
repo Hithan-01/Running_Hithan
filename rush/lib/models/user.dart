@@ -46,6 +46,24 @@ class User extends HiveObject {
   @HiveField(13)
   String? photoPath;
 
+  @HiveField(14)
+  String? equippedTitleId;
+
+  @HiveField(15)
+  int coins;
+
+  @HiveField(16)
+  String? equippedAvatarColorId;
+
+  @HiveField(17)
+  String? equippedAvatarFrameId;
+
+  @HiveField(18)
+  String? equippedRouteColorId;
+
+  @HiveField(19)
+  List<String> purchasedItemIds;
+
   User({
     required this.id,
     required this.name,
@@ -61,7 +79,23 @@ class User extends HiveObject {
     required this.createdAt,
     this.lastRunAt,
     this.photoPath,
+    this.equippedTitleId,
+    this.coins = 0,
+    this.equippedAvatarColorId,
+    this.equippedAvatarFrameId,
+    this.equippedRouteColorId,
+    this.purchasedItemIds = const [],
   });
+
+  void addCoins(int amount) => coins += amount;
+
+  bool hasItem(String itemId) => purchasedItemIds.contains(itemId);
+
+  void purchaseItem(String itemId) {
+    if (!purchasedItemIds.contains(itemId)) {
+      purchasedItemIds = [...purchasedItemIds, itemId];
+    }
+  }
 
   // XP needed for each level
   static const List<int> levelThresholds = [

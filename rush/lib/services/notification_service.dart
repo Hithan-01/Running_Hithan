@@ -61,18 +61,22 @@ class NotificationService {
 
     await _instance._plugin.initialize(initSettings);
 
-    // Create Android notification channel
-    await _instance._plugin
+    final androidImpl = _instance._plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(
-          const AndroidNotificationChannel(
-            _channelId,
-            _channelName,
-            description: _channelDesc,
-            importance: Importance.high,
-          ),
-        );
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    // Request POST_NOTIFICATIONS permission (Android 13+)
+    await androidImpl?.requestNotificationsPermission();
+
+    // Create Android notification channel
+    await androidImpl?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _channelId,
+        _channelName,
+        description: _channelDesc,
+        importance: Importance.high,
+      ),
+    );
 
     debugPrint('NotificationService initialized');
   }
@@ -112,6 +116,30 @@ class NotificationService {
     }
 
     debugPrint('Notifications scheduled for user ${user.name}');
+  }
+
+  /// Show any instant system notification immediately.
+  static Future<void> showNow({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    await _instance._plugin.show(
+      id,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          channelDescription: _channelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
   }
 
   /// Show an instant notification celebrating an active streak.

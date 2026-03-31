@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import '../services/gamification_service.dart';
+import '../models/store_item.dart';
 import '../services/notification_service.dart';
 import '../services/database_service.dart';
 import '../services/audio_coach_service.dart';
@@ -110,17 +111,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () => _pickPhoto(gamification),
             child: Stack(
               children: [
-                Container(
+                Builder(builder: (context) {
+                  final avatarColor = StoreItems.getById(
+                    gamification.equippedAvatarColorId ?? '',
+                  )?.color;
+                  final frameItem = StoreItems.getById(
+                    gamification.equippedAvatarFrameId ?? '',
+                  );
+                  final borderColor = frameItem?.color ?? AppColors.secondary;
+                  final borderWidth = frameItem?.id == 'frame_crown'
+                      ? 4.0
+                      : frameItem != null
+                          ? 3.5
+                          : 3.0;
+                  return Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    gradient: hasPhoto
+                    color: hasPhoto
+                        ? null
+                        : avatarColor,
+                    gradient: hasPhoto || avatarColor != null
                         ? null
                         : const LinearGradient(
                             colors: [AppColors.primary, AppColors.primaryDark],
                           ),
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.secondary, width: 3),
+                    border: Border.all(color: borderColor, width: borderWidth),
+                    boxShadow: frameItem != null
+                        ? [
+                            BoxShadow(
+                              color: borderColor.withAlpha(100),
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
                   ),
                   child: ClipOval(
                     child: hasPhoto
@@ -141,7 +167,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                   ),
-                ),
+                );
+                }),
                 // Camera icon overlay
                 Positioned(
                   bottom: 0,
@@ -191,12 +218,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
+                  // Level badge
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withAlpha(26),
                       borderRadius: BorderRadius.circular(12),
@@ -206,7 +231,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: const TextStyle(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Equipped title badge — tap to change
+                  GestureDetector(
+                    onTap: () => _showTitlePicker(context, gamification),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary.withAlpha(26),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.secondary.withAlpha(80),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            gamification.equippedTitle?.emoji ?? '🏃',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            gamification.equippedTitle?.name ?? 'Corredor',
+                            style: const TextStyle(
+                              color: AppColors.secondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.expand_more_rounded,
+                            size: 14,
+                            color: AppColors.secondary,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -216,6 +280,115 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showTitlePicker(BuildContext context, GamificationService gamification) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        final unlocked = gamification.unlockedTitles;
+        final equippedId = gamification.equippedTitle?.id;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textMuted.withAlpha(80),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text(
+                    'Elige tu título',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              itemCount: unlocked.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (_, i) {
+                final title = unlocked[i];
+                final isEquipped = title.id == equippedId;
+                return GestureDetector(
+                  onTap: () {
+                    gamification.equipTitle(title.id);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isEquipped
+                          ? AppColors.secondary.withAlpha(26)
+                          : AppColors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: isEquipped
+                          ? Border.all(color: AppColors.secondary, width: 1.5)
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Text(title.emoji, style: const TextStyle(fontSize: 22)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: isEquipped
+                                      ? AppColors.secondary
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                title.description,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isEquipped)
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: AppColors.secondary,
+                            size: 20,
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -743,6 +916,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _buildStatCard(
+          icon: Icons.toll_rounded,
+          value: '${user.coins}',
+          label: 'RUSH Coins',
+          color: const Color(0xFFFFB300),
+        ),
       ],
     );
   }
@@ -1067,9 +1247,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   createdAt: DateTime.now(),
                 );
                 await DatabaseService.addNotificationItem(item);
+                // Also fire a real system notification
+                await NotificationService.showNow(
+                  id: 99,
+                  title: titles[type]!,
+                  body: bodies[type]!,
+                );
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Notificacion "$type" creada')),
+                    SnackBar(content: Text('Notificacion "$type" enviada')),
                   );
                 }
               },

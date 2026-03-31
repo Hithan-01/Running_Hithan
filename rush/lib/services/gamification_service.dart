@@ -8,6 +8,8 @@ import '../models/achievement.dart';
 import '../models/poi.dart';
 import '../models/mission.dart';
 import '../models/notification_item.dart';
+import '../models/run_title.dart';
+import '../models/store_item.dart';
 import 'package:uuid/uuid.dart';
 import 'database_service.dart';
 import 'notification_service.dart';
@@ -36,17 +38,55 @@ class GamificationService extends ChangeNotifier {
   static const int xpPerKm = 50;
   static const int xpPerMinute = 2;
 
+  // Coin rewards
+  static const int coinsPerKm = 10;
+  static const int coinsPerDailyMission = 15;
+  static const int coinsPerWeeklyMission = 25;
+  static const int coinsPerLevelUp = 50;
+
+  int get coins => _user?.coins ?? 0;
+
   // Initialize service with user
   Future<void> init() async {
-    _user = DatabaseService.getCurrentUser();
+    final uid = auth.FirebaseAuth.instance.currentUser?.uid;
+    _user = uid != null ? DatabaseService.getUser(uid) : null;
     if (_user != null) {
       _loadUserData();
-      // Intentar sincronizar carreras pendientes al iniciar
+      await _checkAndResetMissions();
       _syncPendingRuns();
-      // Escuchar cambios de conectividad para auto-sincronizar
       _setupConnectivityListener();
     }
     notifyListeners();
+  }
+
+  Future<void> _checkAndResetMissions() async {
+    if (_user == null) return;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // --- Daily reset ---
+    final lastDaily = DatabaseService.getLastDailyAssignmentDate(_user!.id);
+    final lastDailyDay = lastDaily != null
+        ? DateTime(lastDaily.year, lastDaily.month, lastDaily.day)
+        : null;
+    if (lastDailyDay == null || lastDailyDay.isBefore(today)) {
+      await assignDailyMissions();
+    }
+
+    // --- Weekly reset (Monday of current week) ---
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    final lastWeekly = DatabaseService.getLastWeeklyAssignmentDate(_user!.id);
+    final lastWeeklyDay = lastWeekly != null
+        ? DateTime(lastWeekly.year, lastWeekly.month, lastWeekly.day)
+        : null;
+    final activeWeeklyCount = _activeMissions
+        .where((m) => Missions.getById(m.missionId)?.type == MissionType.weekly)
+        .length;
+    if (lastWeeklyDay == null ||
+        lastWeeklyDay.isBefore(monday) ||
+        activeWeeklyCount < Missions.weeklyMissions.length) {
+      await assignWeeklyMissions();
+    }
   }
 
   void _setupConnectivityListener() {
@@ -93,22 +133,28 @@ class GamificationService extends ChangeNotifier {
     _visitedPoiIds = DatabaseService.getVisitedPois(
       _user!.id,
     ).map((p) => p.poiId).toList();
+    _autoEquipTitle();
   }
 
   // Create or get user
-  Future<User> ensureUser(String name, {String? faculty, int? semester}) async {
-    _user = DatabaseService.getCurrentUser();
+  Future<User> ensureUser(
+    String uid,
+    String name, {
+    String? faculty,
+    int? semester,
+  }) async {
+    _user = DatabaseService.getUser(uid);
     if (_user == null) {
       _user = await DatabaseService.createUser(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: uid,
         name: name,
         faculty: faculty,
         semester: semester,
       );
+      // Reset Firestore document so old test data doesn't carry over
+      await SyncService().initNewUser(uid, name);
       // Assign initial daily missions
       await assignDailyMissions();
-      // Create mock runs for testing
-      await _createMockRuns();
     }
     _loadUserData();
     notifyListeners();
@@ -224,10 +270,13 @@ class GamificationService extends ChangeNotifier {
 
     final result = RunResult();
     int totalXp = 0;
+    int totalCoins = 0;
 
-    // XP from distance
+    // XP + coins from distance
     int distanceXp = (run.distanceKm * xpPerKm).round();
+    int distanceCoins = (run.distanceKm * coinsPerKm).round();
     totalXp += distanceXp;
+    totalCoins += distanceCoins;
     result.distanceXp = distanceXp;
 
     // XP from duration
@@ -267,6 +316,7 @@ class GamificationService extends ChangeNotifier {
     // Check level up
     if (_user!.level > previousLevel) {
       result.newLevel = _user!.level;
+      totalCoins += coinsPerLevelUp;
       onLevelUp?.call(_user!.level);
       await _logNotification(
         title: 'Subiste al nivel ${_user!.level}!',
@@ -280,6 +330,7 @@ class GamificationService extends ChangeNotifier {
     for (final achievement in newAchievements) {
       totalXp += achievement.xpReward;
       result.achievementXp += achievement.xpReward;
+      totalCoins += (achievement.xpReward / 5).round();
     }
     result.newAchievements = newAchievements;
 
@@ -288,6 +339,11 @@ class GamificationService extends ChangeNotifier {
 
     // Reschedule notifications (streak reminder skips today since lastRunAt is now)
     await NotificationService.scheduleAllNotifications(_user!);
+
+    // Save earned coins
+    result.coinsEarned = totalCoins;
+    _user!.addCoins(totalCoins);
+    await DatabaseService.updateUser(_user!);
 
     // Celebrate streak if active
     if (_user!.currentStreak >= 2) {
@@ -396,6 +452,17 @@ class GamificationService extends ChangeNotifier {
               run.avgPace > 0 && run.avgPace < 5 && run.distance >= 1000;
           break;
 
+        // Mission achievements
+        case 'first_mission':
+          shouldUnlock = DatabaseService.getCompletedMissionsCount(_user!.id) >= 1;
+          break;
+        case 'ten_missions':
+          shouldUnlock = DatabaseService.getCompletedMissionsCount(_user!.id) >= 10;
+          break;
+        case 'fifty_missions':
+          shouldUnlock = DatabaseService.getCompletedMissionsCount(_user!.id) >= 50;
+          break;
+
         // Secret achievements
         case 'pi_run':
           double km = run.distanceKm;
@@ -403,6 +470,20 @@ class GamificationService extends ChangeNotifier {
           break;
         case 'early_bird':
           shouldUnlock = run.createdAt.hour < 6;
+          break;
+        case 'three_am':
+          shouldUnlock = run.createdAt.hour == 3;
+          break;
+        case 'night_owl':
+          shouldUnlock = run.createdAt.hour >= 22;
+          break;
+        case 'speed_demon':
+          shouldUnlock =
+              run.avgPace > 0 && run.avgPace < 4.0 && run.distance >= 1000;
+          break;
+        case 'golden_hour':
+          final h = run.createdAt.hour;
+          shouldUnlock = h >= 18 && h < 20;
           break;
       }
 
@@ -444,7 +525,11 @@ class GamificationService extends ChangeNotifier {
           progress += run.duration;
           break;
         case MissionGoalType.pois:
-          progress += run.poisVisited.length;
+          if (mission.targetPoiId != null) {
+            progress += run.poisVisited.contains(mission.targetPoiId) ? 1 : 0;
+          } else {
+            progress += run.poisVisited.length;
+          }
           break;
         case MissionGoalType.runs:
           progress += 1;
@@ -456,11 +541,15 @@ class GamificationService extends ChangeNotifier {
       if (progress >= mission.goalValue && !activeMission.isCompleted) {
         await DatabaseService.completeMission(activeMission);
         _user!.addXp(mission.xpReward);
+        final missionCoins = mission.type == MissionType.weekly
+            ? coinsPerWeeklyMission
+            : coinsPerDailyMission;
+        _user!.addCoins(missionCoins);
         await DatabaseService.updateUser(_user!);
         onMissionCompleted?.call(activeMission, mission);
         await _logNotification(
           title: 'Mision completada: ${mission.name}',
-          body: '${mission.description} (+${mission.xpReward} XP)',
+          body: '${mission.description} (+${mission.xpReward} XP · +$missionCoins 🪙)',
           type: 'mission',
         );
       } else {
@@ -476,14 +565,25 @@ class GamificationService extends ChangeNotifier {
   Future<void> assignDailyMissions() async {
     if (_user == null) return;
 
-    // Clear old daily missions
     await DatabaseService.clearDailyMissions(_user!.id);
 
-    // Assign 2-3 random daily missions
     final dailyMissions = List<Mission>.from(Missions.dailyMissions)..shuffle();
-    final toAssign = dailyMissions.take(3);
+    for (final mission in dailyMissions.take(3)) {
+      await DatabaseService.assignMission(_user!.id, mission.id);
+    }
 
-    for (final mission in toAssign) {
+    _activeMissions = DatabaseService.getActiveMissions(_user!.id);
+    notifyListeners();
+  }
+
+  // Assign weekly missions
+  Future<void> assignWeeklyMissions() async {
+    if (_user == null) return;
+
+    await DatabaseService.clearWeeklyMissions(_user!.id);
+
+    final pool = List<Mission>.from(Missions.weeklyMissions)..shuffle();
+    for (final mission in pool.take(4)) {
       await DatabaseService.assignMission(_user!.id, mission.id);
     }
 
@@ -503,6 +603,125 @@ class GamificationService extends ChangeNotifier {
 
   // Get visited POI count
   int get visitedPoiCount => _visitedPoiIds.length;
+
+  // All visited POI ids (for map filtering)
+  List<String> get visitedPoiIds => List.unmodifiable(_visitedPoiIds);
+
+  // POI ids that are targets of specific active missions
+  List<String> get activeMissionTargetPoiIds {
+    return _activeMissions
+        .where((am) => !am.isCompleted)
+        .map((am) => Missions.getById(am.missionId))
+        .whereType<Mission>()
+        .where((m) => m.targetPoiId != null)
+        .map((m) => m.targetPoiId!)
+        .toList();
+  }
+
+  // ── Store ─────────────────────────────────────────────────────────────────
+
+  List<String> get purchasedItemIds => _user?.purchasedItemIds ?? [];
+
+  bool hasItem(String itemId) => _user?.hasItem(itemId) ?? false;
+
+  String? get equippedAvatarColorId => _user?.equippedAvatarColorId;
+  String? get equippedAvatarFrameId => _user?.equippedAvatarFrameId;
+  String? get equippedRouteColorId => _user?.equippedRouteColorId;
+
+  /// Returns null if can't afford or already owned. Returns item on success.
+  Future<StoreItem?> purchaseItem(StoreItem item) async {
+    if (_user == null) return null;
+    if (_user!.hasItem(item.id)) return null;
+    if (_user!.coins < item.price) return null;
+
+    _user!.coins -= item.price;
+    _user!.purchaseItem(item.id);
+
+    // Auto-equip on first purchase of that category
+    _equipItem(item);
+
+    await DatabaseService.updateUser(_user!);
+    _pushCosmeticsToFirestore();
+    notifyListeners();
+    return item;
+  }
+
+  Future<void> equipStoreItem(StoreItem item) async {
+    if (_user == null) return;
+    if (!_user!.hasItem(item.id)) return;
+    _equipItem(item);
+    await DatabaseService.updateUser(_user!);
+    _pushCosmeticsToFirestore();
+    notifyListeners();
+  }
+
+  void _equipItem(StoreItem item) {
+    switch (item.category) {
+      case StoreCategory.avatarColor:
+        _user!.equippedAvatarColorId = item.id;
+      case StoreCategory.avatarFrame:
+        _user!.equippedAvatarFrameId = item.id;
+      case StoreCategory.routeColor:
+        _user!.equippedRouteColorId = item.id;
+    }
+  }
+
+  void _pushCosmeticsToFirestore() {
+    final firebaseUser = auth.FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null || _user == null) return;
+    SyncService().updateUserCosmetics(
+      firebaseUser.uid,
+      avatarColorId: _user!.equippedAvatarColorId,
+      avatarFrameId: _user!.equippedAvatarFrameId,
+      routeColorId: _user!.equippedRouteColorId,
+    );
+  }
+
+  // ── Titles ────────────────────────────────────────────────────────────────
+
+  List<RunTitle> get unlockedTitles {
+    return RunTitles.all.where((t) {
+      switch (t.unlockType) {
+        case TitleUnlockType.always:
+          return true;
+        case TitleUnlockType.level:
+          return (_user?.level ?? 1) >= (t.requiredLevel ?? 1);
+        case TitleUnlockType.achievement:
+          return _unlockedAchievementIds.contains(t.requiredAchievementId);
+      }
+    }).toList();
+  }
+
+  RunTitle? get equippedTitle {
+    final id = _user?.equippedTitleId;
+    if (id == null) return null;
+    return RunTitles.getById(id);
+  }
+
+  Future<void> equipTitle(String titleId) async {
+    if (_user == null) return;
+    _user!.equippedTitleId = titleId;
+    await DatabaseService.updateUser(_user!);
+    notifyListeners();
+  }
+
+  // Auto-equip first unlocked title if none equipped yet
+  void _autoEquipTitle() {
+    if (_user == null || _user!.equippedTitleId != null) return;
+    final titles = unlockedTitles;
+    if (titles.isNotEmpty) {
+      _user!.equippedTitleId = titles.first.id;
+    }
+  }
+
+  // True if there's an active generic POI mission (show all POIs)
+  bool get hasActiveGenericPoiMission {
+    return _activeMissions
+        .where((am) => !am.isCompleted)
+        .map((am) => Missions.getById(am.missionId))
+        .whereType<Mission>()
+        .any((m) => m.goalType == MissionGoalType.pois && m.targetPoiId == null);
+  }
 
   // Log an in-app notification to the activity feed
   Future<void> _logNotification({
@@ -536,6 +755,7 @@ class RunResult {
   int durationXp = 0;
   int poisXp = 0;
   int achievementXp = 0;
+  int coinsEarned = 0;
   List<Poi> newPois = [];
   List<Achievement> newAchievements = [];
   int? newLevel;

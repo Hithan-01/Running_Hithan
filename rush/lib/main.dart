@@ -139,7 +139,7 @@ class _AppInitializerState extends State<AppInitializer> {
         widget.user.displayName ??
         widget.user.email?.split('@').first ??
         'Runner';
-    await gamification.ensureUser(displayName);
+    await gamification.ensureUser(widget.user.uid, displayName);
 
     // Schedule notifications based on current user state
     if (gamification.user != null) {

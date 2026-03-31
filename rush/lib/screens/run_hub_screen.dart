@@ -224,16 +224,19 @@ class _RunHubScreenState extends State<RunHubScreen>
               ),
             ],
           ),
-        // POI markers
+        // POI markers — solo visitados o targets de misión específica
         MarkerLayer(
-          markers: CampusPois.all.map((poi) {
-            final isVisited = location.isTracking &&
-                location.visitedPoisThisRun.contains(poi.id);
+          markers: CampusPois.all.where((poi) =>
+            gamification.visitedPoiIds.contains(poi.id) ||
+            gamification.activeMissionTargetPoiIds.contains(poi.id)
+          ).map((poi) {
+            final isVisited = gamification.visitedPoiIds.contains(poi.id);
+            final isMissionTarget = gamification.activeMissionTargetPoiIds.contains(poi.id);
             return Marker(
               point: LatLng(poi.latitude, poi.longitude),
               width: 44,
               height: 44,
-              child: _buildPoiMapMarker(poi, isVisited),
+              child: _buildPoiMapMarker(poi, isVisited, isMissionTarget: isMissionTarget),
             );
           }).toList(),
         ),
@@ -597,7 +600,7 @@ class _RunHubScreenState extends State<RunHubScreen>
     }
   }
 
-  Widget _buildPoiMapMarker(Poi poi, bool visited) {
+  Widget _buildPoiMapMarker(Poi poi, bool visited, {bool isMissionTarget = false}) {
     final color = _poiCategoryColor(poi.category);
     return Stack(
       children: [
@@ -608,11 +611,17 @@ class _RunHubScreenState extends State<RunHubScreen>
           decoration: BoxDecoration(
             color: visited ? AppColors.success.withAlpha(230) : color.withAlpha(220),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
+            border: Border.all(
+              color: isMissionTarget ? Colors.amber : Colors.white,
+              width: isMissionTarget ? 3 : 2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(70),
-                blurRadius: 4,
+                color: isMissionTarget
+                    ? Colors.amber.withAlpha(160)
+                    : Colors.black.withAlpha(70),
+                blurRadius: isMissionTarget ? 8 : 4,
+                spreadRadius: isMissionTarget ? 2 : 0,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -633,6 +642,20 @@ class _RunHubScreenState extends State<RunHubScreen>
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.check, color: Colors.white, size: 10),
+            ),
+          )
+        else if (isMissionTarget)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: const BoxDecoration(
+                color: Colors.amber,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.star_rounded, color: Colors.white, size: 10),
             ),
           ),
       ],
@@ -718,6 +741,7 @@ class _RunHubScreenState extends State<RunHubScreen>
         final endTime = run.createdAt.add(Duration(seconds: run.duration));
         final runModel = RunModel.create(
           userId: firebaseUser.uid,
+          userName: user.name,
           startTime: run.createdAt,
           endTime: endTime,
           distanceKm: run.distance / 1000.0,

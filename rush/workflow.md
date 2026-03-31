@@ -115,3 +115,11 @@ Fin carrera → Resumen con XP ganados, logros
 ---
 
 **"RUSH - Run. Unlock. Share. Hustle."**
+
+
+
+En esta unidad implementé el consumo de servicios externos en la app. El componente principal es el mapa interactivo, que consume la API de CartoDB para renderizar los tiles del campus y usa el servicio de geolocalización para rastrear la posición del usuario y dibujar su ruta en tiempo real. Además se integró Firebase Firestore para sincronizar las carreras completadas y consultar el leaderboard global.
+
+
+
+

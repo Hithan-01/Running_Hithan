@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../main.dart';
 import '../models/run.dart';
 import '../models/achievement.dart';
@@ -80,33 +81,66 @@ class RunSummaryScreen extends StatelessWidget {
                 const SizedBox(height: 24),
               ],
 
-              // Done button
+              // Done button + Share
               const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const MainNavigation()),
-                    (route) => false,
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const MainNavigation()),
+                        (route) => false,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'CONTINUAR',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'CONTINUAR',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () => _shareRun(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.surface,
+                      foregroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: AppColors.primary),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Icon(Icons.share_rounded),
                   ),
-                ),
+                ],
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  void _shareRun(BuildContext context) {
+    final km = run.distanceKm.toStringAsFixed(2);
+    final duration = Formatters.duration(run.duration);
+    final pace = Formatters.pace(run.avgPace);
+    final xp = result.totalXp;
+    final text =
+        '🏃 Acabo de terminar una carrera en RUSH!\n\n'
+        '📍 $km km\n'
+        '⏱ $duration\n'
+        '⚡ Pace: $pace /km\n'
+        '✨ +$xp XP\n\n'
+        '🎓 Universidad de Montemorelos';
+    Share.share(text);
   }
 
   Widget _buildMainStats() {

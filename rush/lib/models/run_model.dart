@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 class RunModel {
   final String id;
   final String userId;
+  final String userName;
   final DateTime startTime;
   final DateTime endTime;
   final double distanceKm;
@@ -15,6 +16,7 @@ class RunModel {
   RunModel({
     required this.id,
     required this.userId,
+    this.userName = '',
     required this.startTime,
     required this.endTime,
     required this.distanceKm,
@@ -26,6 +28,7 @@ class RunModel {
   // Crear una nueva carrera
   factory RunModel.create({
     required String userId,
+    required String userName,
     required DateTime startTime,
     required DateTime endTime,
     required double distanceKm,
@@ -34,6 +37,7 @@ class RunModel {
     return RunModel(
       id: const Uuid().v4(),
       userId: userId,
+      userName: userName,
       startTime: startTime,
       endTime: endTime,
       distanceKm: distanceKm,
@@ -48,12 +52,11 @@ class RunModel {
     return {
       'id': id,
       'userId': userId,
+      'userName': userName,
       'startTime': Timestamp.fromDate(startTime),
       'endTime': Timestamp.fromDate(endTime),
       'distanceKm': distanceKm,
       'durationSeconds': durationSeconds,
-      // Firestore no soporta listas de objetos complejos fácilmente,
-      // guardamos los puntos como lista de GeoPoints
       'route': routePoints
           .map((p) => GeoPoint(p.latitude, p.longitude))
           .toList(),
