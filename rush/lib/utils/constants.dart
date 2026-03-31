@@ -150,15 +150,15 @@ class AppConstants {
   static const String appTagline = 'Run. Unlock. Share. Hustle.';
 
   // Map defaults (Universidad de Montemorelos coordinates)
-  static const double defaultLatitude = 25.1935;
-  static const double defaultLongitude = -99.8270;
+  static const double defaultLatitude = 25.192661242495106;
+  static const double defaultLongitude = -99.84588553441621;
   static const double defaultZoom = 17.0;
 
-  // Campus bounds (SW corner → NE corner) with padding
-  static const double campusSWLat = 25.1905;
-  static const double campusSWLon = -99.8310;
-  static const double campusNELat = 25.1965;
-  static const double campusNELon = -99.8230;
+  // Campus bounds (SW corner → NE corner) — Universidad de Montemorelos (from GeoJSON)
+  static const double campusSWLat = 25.1897;
+  static const double campusSWLon = -99.8500;
+  static const double campusNELat = 25.1957;
+  static const double campusNELon = -99.8394;
 
   // Gamification
   static const int xpPerKm = 50;
