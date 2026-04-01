@@ -69,6 +69,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) {
         final gamification = context.read<GamificationService>();
         await gamification.ensureUser(
+          credential.user!.uid,
           _nameController.text.trim(),
           faculty: _selectedFaculty,
           semester: _selectedSemester,

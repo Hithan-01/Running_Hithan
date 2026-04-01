@@ -11,6 +11,7 @@ import 'map_screen.dart';
 import 'missions_screen.dart';
 import 'notification_center_screen.dart';
 import 'profile_screen.dart';
+import 'history_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -49,9 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: CircularStepGauge(
-                      currentSteps: estimatedSteps > 0
-                          ? estimatedSteps
-                          : 7250, // Mock data if no real data
+                      currentSteps: estimatedSteps,
                       goalSteps: 20000,
                       currentXP: user.xp - user.xpForCurrentLevel,
                       xpToNextLevel: user.xpForNextLevel - user.xpForCurrentLevel,
@@ -81,6 +80,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
 
                   const SizedBox(height: 24),
+
+                  // Activity / Charts Section
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildActivitySection(user.id),
+                  ),
+
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
@@ -110,7 +117,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: _buildBellIcon(gamification),
           ),
 
-          // Center badges (XP, Rank, Streak)
+          // Center badges (XP, Coins, Streak)
           Row(
             children: [
               _buildXpBadge(
@@ -119,9 +126,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(width: 8),
               _buildHeaderBadge(
-                icon: Icons.leaderboard_rounded,
-                value: '${gamification.level}th',
-                color: _getRankColor(gamification.level),
+                icon: Icons.toll_rounded,
+                value: '${gamification.coins}',
+                color: const Color(0xFFFFB300),
               ),
               const SizedBox(width: 8),
               _buildHeaderBadge(
@@ -268,18 +275,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Color _getRankColor(int rank) {
-    if (rank == 1) {
-      return const Color(0xFFFFD700); // Gold
-    } else if (rank == 2) {
-      return const Color(0xFFC0C0C0); // Silver
-    } else if (rank == 3) {
-      return const Color(0xFFCD7F32); // Bronze
-    } else {
-      return AppColors.textSecondary;
-    }
-  }
-
   Widget _buildStartButton(BuildContext context) {
     return Center(
       child: SizedBox(
@@ -391,6 +386,206 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildActivitySection(String userId) {
+    final runs = DatabaseService.getAllRuns(userId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Actividad reciente',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const HistoryScreen()),
+              ),
+              child: const Text(
+                'Ver todo',
+                style: TextStyle(
+                  color: AppColors.secondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (runs.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Center(
+              child: Text(
+                'Aún no hay carreras registradas',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+            ),
+          )
+        else
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: _buildMiniBarChart(runs)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildMiniPaceTrend(runs)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMiniBarChart(List runs) {
+    final now = DateTime.now();
+    final days = List.generate(7, (i) {
+      final d = now.subtract(Duration(days: 6 - i));
+      return DateTime(d.year, d.month, d.day);
+    });
+    final distPerDay = <DateTime, double>{for (final d in days) d: 0};
+    for (final run in runs) {
+      final day = DateTime(run.createdAt.year, run.createdAt.month, run.createdAt.day);
+      if (distPerDay.containsKey(day)) {
+        distPerDay[day] = distPerDay[day]! + run.distance / 1000.0;
+      }
+    }
+    final values = days.map((d) => distPerDay[d]!).toList();
+    final maxVal = values.reduce((a, b) => a > b ? a : b);
+    const labels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 6)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('7 días', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 92,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(7, (i) {
+                final km = values[i];
+                final isToday = i == 6;
+                final frac = maxVal > 0 ? km / maxVal : 0.0;
+                final barH = 8.0 + frac * 56.0;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 400),
+                          height: barH,
+                          decoration: BoxDecoration(
+                            color: km == 0
+                                ? AppColors.background
+                                : isToday
+                                    ? AppColors.primary
+                                    : AppColors.primary.withAlpha(100),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          labels[days[i].weekday - 1],
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                            color: isToday ? AppColors.primary : AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniPaceTrend(List runs) {
+    final withPace = runs
+        .where((r) => (r.avgPace as double) > 0 && r.distance >= 500)
+        .toList()
+        .reversed
+        .take(8)
+        .toList()
+        .reversed
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 6)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Ritmo', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 80,
+            child: withPace.length < 2
+                ? const Center(child: Text('Sin datos', style: TextStyle(color: AppColors.textMuted, fontSize: 11)))
+                : CustomPaint(
+                    size: const Size(double.infinity, 80),
+                    painter: _MiniPacePainter(
+                      paces: withPace.map((r) => r.avgPace as double).toList(),
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                withPace.isNotEmpty ? _fmtPace(withPace.first.avgPace) : '--',
+                style: const TextStyle(fontSize: 9, color: AppColors.textMuted),
+              ),
+              const Text('min/km', style: TextStyle(fontSize: 9, color: AppColors.textMuted)),
+              Text(
+                withPace.isNotEmpty ? _fmtPace(withPace.last.avgPace) : '--',
+                style: const TextStyle(fontSize: 9, color: AppColors.primary, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmtPace(double pace) {
+    final min = pace.floor();
+    final sec = ((pace - min) * 60).round();
+    return "$min'${sec.toString().padLeft(2, '0')}\"";
+  }
+
   Widget _buildMissionsSection(GamificationService gamification) {
     final activeMissions = gamification.activeMissions;
 
@@ -481,4 +676,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ],
     );
   }
+}
+
+// ─── Mini pace line painter (dashboard) ──────────────────────────────────────
+
+class _MiniPacePainter extends CustomPainter {
+  final List<double> paces;
+  _MiniPacePainter({required this.paces});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (paces.length < 2) return;
+    final minP = paces.reduce((a, b) => a < b ? a : b);
+    final maxP = paces.reduce((a, b) => a > b ? a : b);
+    final range = (maxP - minP).clamp(0.5, double.infinity);
+    final xStep = size.width / (paces.length - 1);
+
+    List<Offset> pts = [];
+    for (int i = 0; i < paces.length; i++) {
+      final x = i * xStep;
+      final y = size.height * 0.1 + (1 - (paces[i] - minP) / range) * size.height * 0.8;
+      pts.add(Offset(x, y));
+    }
+
+    final fill = Path()..moveTo(pts.first.dx, size.height);
+    for (final p in pts) { fill.lineTo(p.dx, p.dy); }
+    fill..lineTo(pts.last.dx, size.height)..close();
+    canvas.drawPath(
+      fill,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [AppColors.primary.withAlpha(70), AppColors.primary.withAlpha(5)],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+    );
+
+    final line = Paint()
+      ..color = AppColors.primary
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+    for (int i = 1; i < pts.length; i++) {
+      final cx = (pts[i - 1].dx + pts[i].dx) / 2;
+      path.cubicTo(cx, pts[i - 1].dy, cx, pts[i].dy, pts[i].dx, pts[i].dy);
+    }
+    canvas.drawPath(path, line);
+
+    canvas.drawCircle(pts.last, 4, Paint()..color = AppColors.primary);
+    canvas.drawCircle(pts.last, 7, Paint()..color = AppColors.primary.withAlpha(40));
+  }
+
+  @override
+  bool shouldRepaint(_MiniPacePainter old) => old.paces != paces;
 }

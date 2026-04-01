@@ -31,13 +31,19 @@ class UserAdapter extends TypeAdapter<User> {
       createdAt: fields[11] as DateTime,
       lastRunAt: fields[12] as DateTime?,
       photoPath: fields[13] as String?,
+      equippedTitleId: fields[14] as String?,
+      coins: (fields[15] as num?)?.toInt() ?? 0,
+      equippedAvatarColorId: fields[16] as String?,
+      equippedAvatarFrameId: fields[17] as String?,
+      equippedRouteColorId: fields[18] as String?,
+      purchasedItemIds: (fields[19] as List?)?.cast<String>() ?? [],
     );
   }
 
   @override
   void write(BinaryWriter writer, User obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -65,7 +71,19 @@ class UserAdapter extends TypeAdapter<User> {
       ..writeByte(12)
       ..write(obj.lastRunAt)
       ..writeByte(13)
-      ..write(obj.photoPath);
+      ..write(obj.photoPath)
+      ..writeByte(14)
+      ..write(obj.equippedTitleId)
+      ..writeByte(15)
+      ..write(obj.coins)
+      ..writeByte(16)
+      ..write(obj.equippedAvatarColorId)
+      ..writeByte(17)
+      ..write(obj.equippedAvatarFrameId)
+      ..writeByte(18)
+      ..write(obj.equippedRouteColorId)
+      ..writeByte(19)
+      ..write(obj.purchasedItemIds);
   }
 
   @override

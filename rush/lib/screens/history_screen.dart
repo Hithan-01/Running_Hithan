@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/gamification_service.dart';
 import '../services/database_service.dart';
 import '../widgets/run_stats_panel.dart';
@@ -68,6 +69,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 SliverToBoxAdapter(
                   child: _buildWeeklySummary(runs),
                 ),
+
+                // Charts row: distance bars + pace trend
+                if (runs.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: _buildWeeklyChart(runs)),
+                            const SizedBox(width: 12),
+                            Expanded(child: _buildPaceTrend(runs)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // Runs list or empty state
                 if (runs.isEmpty)
@@ -239,6 +258,211 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWeeklyChart(List runs) {
+    final now = DateTime.now();
+    final days = List.generate(7, (i) {
+      final d = now.subtract(Duration(days: 6 - i));
+      return DateTime(d.year, d.month, d.day);
+    });
+
+    final distancePerDay = <DateTime, double>{for (final d in days) d: 0};
+    for (final run in runs) {
+      final day = DateTime(run.createdAt.year, run.createdAt.month, run.createdAt.day);
+      if (distancePerDay.containsKey(day)) {
+        distancePerDay[day] = distancePerDay[day]! + run.distance / 1000.0;
+      }
+    }
+
+    final values = days.map((d) => distancePerDay[d]!).toList();
+    final maxVal = values.reduce((a, b) => a > b ? a : b);
+    const dayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+    return Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(10),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Últimos 7 días',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 120,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(7, (i) {
+                  final km = values[i];
+                  final isToday = i == 6;
+                  final frac = maxVal > 0 ? (km / maxVal) : 0.0;
+                  final barH = 8.0 + frac * 60.0;
+
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (km > 0)
+                            Text(
+                              km.toStringAsFixed(1),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isToday
+                                    ? AppColors.primary
+                                    : AppColors.textMuted,
+                              ),
+                            ),
+                          const SizedBox(height: 3),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeOut,
+                            height: barH,
+                            decoration: BoxDecoration(
+                              color: km == 0
+                                  ? AppColors.background
+                                  : isToday
+                                      ? AppColors.primary
+                                      : AppColors.primary.withAlpha(100),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            dayLabels[days[i].weekday - 1],
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isToday
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isToday
+                                  ? AppColors.primary
+                                  : AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+    );
+  }
+
+  Widget _buildPaceTrend(List runs) {
+    // Last 8 runs with valid pace, oldest → newest
+    final withPace = runs
+        .where((r) => (r.avgPace as double) > 0 && r.distance >= 500)
+        .toList()
+        .reversed
+        .take(8)
+        .toList()
+        .reversed
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(10),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tendencia ritmo',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 100,
+            child: withPace.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Sin datos',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                : CustomPaint(
+                    size: const Size(double.infinity, 100),
+                    painter: _PaceLinePainter(
+                      paces: withPace
+                          .map((r) => r.avgPace as double)
+                          .toList(),
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                withPace.isNotEmpty
+                    ? Formatters.pace(withPace.first.avgPace)
+                    : '--',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const Text(
+                'min/km',
+                style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+              ),
+              Text(
+                withPace.isNotEmpty
+                    ? Formatters.pace(withPace.last.avgPace)
+                    : '--',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -532,6 +756,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: GestureDetector(
+                            onTap: () {
+                              final kmStr = (run.distance / 1000).toStringAsFixed(2);
+                              final text =
+                                  '🏃 Acabo de correr $kmStr km en RUSH!\n\n'
+                                  '⏱ ${Formatters.duration(run.duration)}\n'
+                                  '⚡ Pace: ${Formatters.pace(run.avgPace)} /km\n'
+                                  '✨ +${run.xpEarned} XP\n\n'
+                                  '🎓 Universidad de Montemorelos';
+                              Share.share(text);
+                            },
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.share_rounded, size: 15, color: AppColors.textMuted),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Compartir',
+                                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -796,4 +1047,90 @@ class RunDetailScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+// ─── Pace line chart painter ─────────────────────────────────────────────────
+
+class _PaceLinePainter extends CustomPainter {
+  final List<double> paces;
+
+  _PaceLinePainter({required this.paces});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (paces.length < 2) return;
+
+    // Lower pace = better → invert Y axis (best pace at top)
+    final minPace = paces.reduce((a, b) => a < b ? a : b);
+    final maxPace = paces.reduce((a, b) => a > b ? a : b);
+    final range = (maxPace - minPace).clamp(0.5, double.infinity);
+
+    double xStep = size.width / (paces.length - 1);
+
+    List<Offset> points = [];
+    for (int i = 0; i < paces.length; i++) {
+      final x = i * xStep;
+      final normalized = (paces[i] - minPace) / range;
+      // Invert: lower pace → higher on screen (top = good)
+      final y = size.height * 0.1 + (1 - normalized) * size.height * 0.75;
+      points.add(Offset(x, y));
+    }
+
+    // Draw filled area under line
+    final fillPath = Path()..moveTo(points.first.dx, size.height);
+    for (final p in points) {
+      fillPath.lineTo(p.dx, p.dy);
+    }
+    fillPath.lineTo(points.last.dx, size.height);
+    fillPath.close();
+
+    canvas.drawPath(
+      fillPath,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF4CAF50).withAlpha(80),
+            const Color(0xFF4CAF50).withAlpha(5),
+          ],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+    );
+
+    // Draw line
+    final linePaint = Paint()
+      ..color = const Color(0xFF4CAF50)
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final linePath = Path()..moveTo(points.first.dx, points.first.dy);
+    for (int i = 1; i < points.length; i++) {
+      final prev = points[i - 1];
+      final curr = points[i];
+      final cx = (prev.dx + curr.dx) / 2;
+      linePath.cubicTo(cx, prev.dy, cx, curr.dy, curr.dx, curr.dy);
+    }
+    canvas.drawPath(linePath, linePaint);
+
+    // Draw dots
+    final dotPaint = Paint()..color = const Color(0xFF4CAF50);
+    final lastDotPaint = Paint()..color = const Color(0xFF4CAF50);
+    for (int i = 0; i < points.length; i++) {
+      final isLast = i == points.length - 1;
+      canvas.drawCircle(points[i], isLast ? 5 : 3, isLast ? lastDotPaint : dotPaint);
+      if (isLast) {
+        canvas.drawCircle(
+          points[i],
+          8,
+          Paint()
+            ..color = const Color(0xFF4CAF50).withAlpha(40)
+            ..style = PaintingStyle.fill,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PaceLinePainter old) => old.paces != paces;
 }

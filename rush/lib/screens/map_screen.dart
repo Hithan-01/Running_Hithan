@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../services/location_service.dart';
 import '../services/gamification_service.dart';
+import '../models/store_item.dart';
 import '../widgets/run_stats_panel.dart';
 import '../utils/constants.dart';
 import 'run_summary_screen.dart';
@@ -46,13 +47,14 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<LocationService, GamificationService>(
-      builder: (context, location, gamification, child) {
+    return Consumer<LocationService>(
+      builder: (context, location, child) {
+        final gamification = context.read<GamificationService>();
         return Scaffold(
           body: Stack(
             children: [
-              // Map — full screen
-              _buildMap(location, gamification),
+              // Map — full screen (only rebuilds on location changes)
+              _buildMap(location),
 
               // Top bar (back button only)
               _buildTopBar(location),
@@ -72,7 +74,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildMap(LocationService location, GamificationService gamification) {
+  Widget _buildMap(LocationService location) {
     final currentPos = location.currentPosition;
     final center = currentPos != null
         ? LatLng(currentPos.latitude, currentPos.longitude)
@@ -125,19 +127,27 @@ class _MapScreenState extends State<MapScreen> {
 
         // Route polyline
         if (location.isTracking && location.routePoints.isNotEmpty)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: location.routePoints
-                    .map((p) => LatLng(p.latitude, p.longitude))
-                    .toList(),
-                color: AppColors.primary,
-                strokeWidth: 6,
-                borderColor: AppColors.primary.withAlpha(60),
-                borderStrokeWidth: 3,
-              ),
-            ],
-          ),
+          Builder(builder: (context) {
+            final routeColorId = context
+                .read<GamificationService>()
+                .equippedRouteColorId;
+            final routeColor =
+                StoreItems.getById(routeColorId ?? '')?.color ??
+                AppColors.primary;
+            return PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: location.routePoints
+                      .map((p) => LatLng(p.latitude, p.longitude))
+                      .toList(),
+                  color: routeColor,
+                  strokeWidth: 6,
+                  borderColor: routeColor.withAlpha(60),
+                  borderStrokeWidth: 3,
+                ),
+              ],
+            );
+          }),
 
         // Current location marker with direction arrow
         if (currentPos != null)
@@ -529,6 +539,7 @@ class _MapScreenState extends State<MapScreen> {
 
         final runModel = RunModel.create(
           userId: firebaseUser.uid,
+          userName: gamification.user?.name ?? '',
           startTime: run.createdAt,
           endTime: endTime,
           distanceKm: run.distance / 1000.0,

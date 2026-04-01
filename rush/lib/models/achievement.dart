@@ -23,6 +23,10 @@ class AchievementIcons {
     'calculate': Icons.calculate_rounded,
     'wb_twilight': Icons.wb_twilight_rounded,
     'lock': Icons.lock_rounded,
+    'nights_stay': Icons.nights_stay_rounded,
+    'bedtime': Icons.bedtime_rounded,
+    'flash_on': Icons.flash_on_rounded,
+    'wb_sunny': Icons.wb_sunny_rounded,
   };
 
   static IconData getIcon(String iconName) {
@@ -36,6 +40,7 @@ enum AchievementCategory {
   consistency,
   speed,
   secret,
+  missions,
 }
 
 @HiveType(typeId: 3)
@@ -211,6 +216,32 @@ class Achievements {
       categoryIndex: 3,
     ),
 
+    // Missions
+    Achievement(
+      id: 'first_mission',
+      name: 'Primera Misión',
+      description: 'Completa tu primera misión',
+      icon: 'flag',
+      xpReward: 50,
+      categoryIndex: 5,
+    ),
+    Achievement(
+      id: 'ten_missions',
+      name: 'Veterano',
+      description: 'Completa 10 misiones',
+      icon: 'military_tech',
+      xpReward: 150,
+      categoryIndex: 5,
+    ),
+    Achievement(
+      id: 'fifty_missions',
+      name: 'Maestro de Misiones',
+      description: 'Completa 50 misiones',
+      icon: 'workspace_premium',
+      xpReward: 500,
+      categoryIndex: 5,
+    ),
+
     // Secrets
     Achievement(
       id: 'pi_run',
@@ -225,6 +256,38 @@ class Achievements {
       name: 'Madrugador',
       description: 'Corre antes de las 6:00 AM',
       icon: 'wb_twilight',
+      xpReward: 75,
+      categoryIndex: 4,
+    ),
+    Achievement(
+      id: 'three_am',
+      name: 'Fantasma del Campus',
+      description: '¿Quién corre a las 3 AM?',
+      icon: 'nights_stay',
+      xpReward: 300,
+      categoryIndex: 4,
+    ),
+    Achievement(
+      id: 'night_owl',
+      name: 'Búho Nocturno',
+      description: 'Corre después de las 10:00 PM',
+      icon: 'bedtime',
+      xpReward: 100,
+      categoryIndex: 4,
+    ),
+    Achievement(
+      id: 'speed_demon',
+      name: 'Demonio de Velocidad',
+      description: 'Manten un pace menor a 4:00/km',
+      icon: 'flash_on',
+      xpReward: 350,
+      categoryIndex: 4,
+    ),
+    Achievement(
+      id: 'golden_hour',
+      name: 'Hora Dorada',
+      description: 'Corre durante la hora dorada (6-8 PM)',
+      icon: 'wb_sunny',
       xpReward: 75,
       categoryIndex: 4,
     ),

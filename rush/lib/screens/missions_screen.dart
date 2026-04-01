@@ -38,11 +38,11 @@ class MissionsScreen extends StatelessWidget {
               children: [
                 _buildSectionHeader('Diarias'),
                 const SizedBox(height: 12),
-                _buildMissionList(Missions.dailyMissions, activeMap),
+                _buildAssignedMissionList(Missions.dailyMissions, activeMap),
                 const SizedBox(height: 24),
                 _buildSectionHeader('Semanales'),
                 const SizedBox(height: 12),
-                _buildMissionList(Missions.weeklyMissions, activeMap),
+                _buildAssignedMissionList(Missions.weeklyMissions, activeMap),
                 const SizedBox(height: 24),
               ],
             ),
@@ -63,35 +63,31 @@ class MissionsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMissionList(
+  Widget _buildAssignedMissionList(
     List<Mission> missions,
     Map<String, ActiveMission> activeMap,
   ) {
+    final assigned = missions.where((m) => activeMap.containsKey(m.id)).toList();
+
+    if (assigned.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text('No hay misiones asignadas', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: missions.length,
+      itemCount: assigned.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final mission = missions[index];
-        final active = activeMap[mission.id];
-        final isActive = active != null;
-
-        if (isActive) {
-          return MissionCard(
-            mission: mission,
-            currentProgress: active.currentProgress,
-            isCompleted: active.isCompleted,
-          );
-        }
-
-        // Locked / unassigned mission (grayed out)
-        return Opacity(
-          opacity: 0.45,
-          child: MissionCard(
-            mission: mission,
-            currentProgress: 0,
-          ),
+        final mission = assigned[index];
+        final active = activeMap[mission.id]!;
+        return MissionCard(
+          mission: mission,
+          currentProgress: active.currentProgress,
+          isCompleted: active.isCompleted,
         );
       },
     );
