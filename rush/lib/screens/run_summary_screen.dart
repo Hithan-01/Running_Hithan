@@ -1,3 +1,4 @@
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../main.dart';
@@ -7,20 +8,45 @@ import '../services/gamification_service.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
 
-class RunSummaryScreen extends StatelessWidget {
+class RunSummaryScreen extends StatefulWidget {
   final Run run;
   final RunResult result;
 
   const RunSummaryScreen({super.key, required this.run, required this.result});
 
   @override
+  State<RunSummaryScreen> createState() => _RunSummaryScreenState();
+}
+
+class _RunSummaryScreenState extends State<RunSummaryScreen> {
+  late final ConfettiController _confetti;
+
+  @override
+  void initState() {
+    super.initState();
+    _confetti = ConfettiController(duration: const Duration(seconds: 3));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _confetti.play());
+  }
+
+  @override
+  void dispose() {
+    _confetti.dispose();
+    super.dispose();
+  }
+
+  Run get run => widget.run;
+  RunResult get result => widget.result;
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
+      body: Stack(
+        children: [
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 20),
@@ -124,6 +150,24 @@ class RunSummaryScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+          // Confetti desde arriba al centro
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confetti,
+              blastDirectionality: BlastDirectionality.explosive,
+              numberOfParticles: 30,
+              gravity: 0.2,
+              colors: const [
+                AppColors.primary,
+                AppColors.secondary,
+                AppColors.accent,
+                Colors.white,
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

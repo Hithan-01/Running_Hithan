@@ -1,181 +1,165 @@
-# RUSH
+# RUSH — Run. Unlock. Share. Hustle.
 
-App de running gamificada para el campus de la Universidad de Montemorelos.
+App móvil gamificada de running para el campus de la **Universidad de Montemorelos**. Combina tracking GPS con mecánicas de videojuego: XP, niveles, logros, misiones, POIs, tienda de cosméticos y leaderboard.
+
+---
 
 ## Stack Tecnológico
 
-| Tecnología | Uso |
-|------------|-----|
-| Flutter 3.9+ | Framework UI |
-| Dart | Lenguaje |
-| flutter_map + OpenStreetMap | Mapas y rutas (gratis, sin API key) |
-| Geolocator | Tracking GPS |
-| Hive | Base de datos local (NoSQL) |
-| Firebase Auth | Autenticación de usuarios |
-| Provider | State management |
+| Tecnología | Versión | Uso |
+|------------|---------|-----|
+| Flutter | 3.9+ | Framework UI multiplataforma |
+| Dart | 3.7+ | Lenguaje de programación |
+| flutter_map | 8.2.2 | Mapas (tiles CartoDB + Google Maps satélite) |
+| Geolocator | 14.x | Tracking GPS |
+| Hive CE | 2.7.0 | Base de datos NoSQL local |
+| Firebase Auth | 6.x | Autenticación Email/Password |
+| Cloud Firestore | 6.x | Sincronización en la nube y leaderboard |
+| Provider | 6.x | Gestión de estado |
+| flutter_tts | 4.x | Audio Coach (TTS en español) |
+| flutter_local_notifications | 18.x | Notificaciones locales |
+| share_plus | 7.x | Compartir carreras |
+| connectivity_plus | 7.x | Detección de conexión para sync |
+
+---
 
 ## Estructura del Proyecto
 
 ```
-lib/
-├── models/
-│   ├── user.dart
-│   ├── run.dart
-│   ├── achievement.dart
-│   ├── poi.dart
-│   └── mission.dart
-├── screens/
-│   ├── dashboard_screen.dart
-│   ├── map_screen.dart
-│   ├── profile_screen.dart
-│   ├── leaderboard_screen.dart
-│   ├── history_screen.dart
-│   └── run_summary_screen.dart
-├── widgets/
-│   ├── xp_bar.dart
-│   ├── mission_card.dart
-│   ├── poi_marker.dart
-│   ├── run_stats_panel.dart
-│   └── circular_step_gauge.dart
-├── services/
-│   ├── location_service.dart
-│   ├── database_service.dart
-│   └── gamification_service.dart
-└── utils/
-    ├── constants.dart
-    └── formatters.dart
+rush/
+├── lib/
+│   ├── main.dart
+│   ├── models/
+│   │   ├── user.dart
+│   │   ├── run.dart
+│   │   ├── achievement.dart
+│   │   ├── poi.dart                  # 38 POIs reales del campus
+│   │   ├── mission.dart
+│   │   ├── store_item.dart           # Cosméticos de la tienda
+│   │   ├── run_title.dart            # Títulos desbloqueables
+│   │   └── notification_item.dart
+│   ├── screens/
+│   │   ├── login_screen.dart
+│   │   ├── register_screen.dart
+│   │   ├── dashboard_screen.dart
+│   │   ├── run_hub_screen.dart       # Pantalla principal de carrera
+│   │   ├── map_screen.dart
+│   │   ├── history_screen.dart
+│   │   ├── profile_screen.dart
+│   │   ├── leaderboard_screen.dart
+│   │   ├── achievements_screen.dart
+│   │   ├── missions_screen.dart
+│   │   ├── run_summary_screen.dart
+│   │   └── notification_center_screen.dart
+│   ├── services/
+│   │   ├── gamification_service.dart
+│   │   ├── database_service.dart
+│   │   ├── location_service.dart
+│   │   ├── sync_service.dart
+│   │   ├── notification_service.dart
+│   │   └── audio_coach_service.dart
+│   ├── widgets/
+│   │   ├── xp_bar.dart
+│   │   ├── mission_card.dart
+│   │   ├── poi_marker.dart
+│   │   ├── run_stats_panel.dart
+│   │   └── circular_step_gauge.dart
+│   └── utils/
+│       ├── constants.dart
+│       └── formatters.dart
+├── docs/
+│   ├── manual_usuario.md
+│   ├── manual_tecnico.md
+│   └── guia_desarrollo.md
+├── workflow.md
+└── comandos.md
 ```
 
-## Base de Datos (Hive)
-
-Hive es una base de datos NoSQL ligera y rápida para Flutter. Los datos se guardan localmente en el dispositivo.
-
-### Boxes (Colecciones)
-
-| Box | Modelo | Descripción |
-|-----|--------|-------------|
-| `users` | `User` | Datos del usuario |
-| `runs` | `Run` | Historial de carreras |
-| `achievements` | `UnlockedAchievement` | Logros desbloqueados |
-| `visited_pois` | `VisitedPoi` | POIs visitados |
-| `active_missions` | `ActiveMission` | Misiones activas |
+---
 
 ## Instalación
 
 ```bash
-# Clonar repositorio
+# 1. Clonar el repositorio
 git clone <repo-url>
 cd rush
 
-# Instalar dependencias
+# 2. Instalar dependencias
 flutter pub get
 
-# Generar código de Hive (adapters)
-dart run build_runner build
+# 3. Generar adaptadores Hive
+dart run build_runner build --delete-conflicting-outputs
 
-# Ejecutar
-flutter run
+# 4. Configurar Firebase
+# Colocar google-services.json en android/app/
+# Colocar GoogleService-Info.plist en ios/Runner/
+
+# 5. Verificar entorno
+flutter doctor
+
+# 6. Ejecutar
+flutter run -d emulator-5554
 ```
 
-## Dependencias
+---
 
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  flutter_map: ^6.1.0        # Mapas OpenStreetMap (gratis)
-  latlong2: ^0.9.0           # Coordenadas
-  geolocator: ^10.1.0        # GPS
-  hive: ^2.2.3               # DB local
-  hive_flutter: ^1.1.0
-  firebase_core: ^2.24.0     # Firebase
-  firebase_auth: ^4.16.0     # Autenticación
-  provider: ^6.1.0           # State management
-  intl: ^0.18.0
-  uuid: ^4.2.1
+## Funcionalidades
 
-dev_dependencies:
-  hive_generator: ^2.0.1
-  build_runner: ^2.4.6
-```
+### Core
+- Tracking GPS (iniciar / pausar / detener)
+- Métricas en vivo: distancia, tiempo, pace
+- Mapa del campus con ruta trazada en tiempo real
+- Polígono del campus delimitado con coordenadas GeoJSON exactas
+- Vista satélite (Google Maps tiles)
+- Guardar carreras (Hive local + Firestore sync offline-first)
+- Compartir carreras en redes sociales
 
-## Configuración
+### Gamificación
+- XP y 6 niveles (Rookie Runner → Campus Legend)
+- 38 POIs reales del campus UM con coordenadas precisas
+- 17 logros en 5 categorías (exploración, distancia, consistencia, velocidad, secretos)
+- Misiones diarias (5) y semanales (3)
+- Rachas de días consecutivos
+- RUSH Coins y tienda de cosméticos (colores de avatar, marcos, colores de ruta)
+- Títulos desbloqueables para el leaderboard
+- Audio Coach TTS en español (por km, por 5 min, POIs, logros)
 
-### Firebase (Autenticación)
+### Perfil y Social
+- Foto de perfil, facultad y semestre
+- Historial de carreras con gráfica semanal
+- Leaderboard global, por facultad y por semestre
+- Filtros: Hoy / Semana / Mes / Total
+- Podio visual con medallas para top 3
 
-1. Crear proyecto en [Firebase Console](https://console.firebase.google.com/)
-2. Agregar app iOS/Android
-3. Descargar archivo de configuración:
-   - iOS: `GoogleService-Info.plist` → `ios/Runner/`
-   - Android: `google-services.json` → `android/app/`
-4. Habilitar "Email/Password" en Authentication
+---
 
-### Mapas (OpenStreetMap)
+## Base de Datos Local (Hive)
 
-**¡No requiere configuración!** Los mapas de OpenStreetMap son gratuitos y no necesitan API key.
+| Box | Tipo | Descripción |
+|-----|------|-------------|
+| `users` | `User` | Perfil local |
+| `runs` | `Run` | Historial de carreras |
+| `achievements` | `UnlockedAchievement` | Logros desbloqueados |
+| `visited_pois` | `VisitedPoi` | POIs visitados |
+| `active_missions` | `ActiveMission` | Misiones en progreso |
+| `notification_history` | `NotificationItem` | Historial de notificaciones |
 
-### Permisos de Ubicación (iOS)
-
-**iOS** (`ios/Runner/Info.plist`):
-```xml
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>Necesitamos tu ubicación para trackear tu carrera</string>
-<key>NSLocationAlwaysUsageDescription</key>
-<string>Necesitamos tu ubicación para trackear tu carrera en segundo plano</string>
-```
-
-## Gamificación
-
-### Sistema de XP y Niveles
-- 50 XP por kilómetro corrido
-- 2 XP por minuto de carrera
-- Bonos por visitar POIs y completar misiones
-
-### POIs del Campus (10 puntos)
-- **Académicos**: Biblioteca, Facultad de Ingeniería, Facultad de Salud
-- **Deportivos**: Gimnasio, Pista de Atletismo, Canchas
-- **Landmarks**: Capilla, Cafetería, Lago, Entrada Principal
-
-### Logros (16 achievements)
-- Exploración, Distancia, Consistencia, Velocidad, Secretos
-
-### Misiones
-- 5 misiones diarias
-- 3 misiones semanales
-
-## Arquitectura
-
-```
-┌─────────────────────────────────────────┐
-│              UI (Screens)               │
-├─────────────────────────────────────────┤
-│              Widgets                    │
-├─────────────────────────────────────────┤
-│         Provider (State)                │
-├─────────────────────────────────────────┤
-│             Services                    │
-│  ┌──────────┬──────────┬──────────┐     │
-│  │ Location │ Database │ Gamific. │     │
-│  └──────────┴──────────┴──────────┘     │
-├─────────────────────────────────────────┤
-│            Hive / GPS                   │
-└─────────────────────────────────────────┘
-```
+---
 
 ## Comandos Útiles
 
 ```bash
-# Ejecutar en modo debug
-flutter run
+# Ejecutar en emulador
+flutter run -d emulator-5554
 
-# Build Android APK
-flutter build apk --release
-
-# Build iOS
-flutter build ios --release
+# Simular GPS en emulador (longitud primero)
+adb emu geo fix -99.84588553441621 25.192661242495106
 
 # Regenerar código Hive
 dart run build_runner build --delete-conflicting-outputs
+
+# Build APK release
+flutter build apk --release
 
 # Limpiar cache
 flutter clean && flutter pub get
@@ -183,6 +167,4 @@ flutter clean && flutter pub get
 
 ---
 
-**"RUSH - Run. Unlock. Share. Hustle."**
-
-
+**"RUSH — Run. Unlock. Share. Hustle."**

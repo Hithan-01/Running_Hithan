@@ -7,7 +7,7 @@ import '../widgets/mission_card.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
 import '../services/database_service.dart';
-import 'map_screen.dart';
+import 'run_hub_screen.dart';
 import 'missions_screen.dart';
 import 'notification_center_screen.dart';
 import 'profile_screen.dart';
@@ -302,7 +302,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _startRun(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const MapScreen()),
+      MaterialPageRoute(builder: (_) => const RunHubScreen()),
     );
   }
 

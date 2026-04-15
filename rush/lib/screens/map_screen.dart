@@ -93,12 +93,6 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    // Campus bounds — lock camera to university area
-    final campusBounds = LatLngBounds(
-      const LatLng(AppConstants.campusSWLat, AppConstants.campusSWLon),
-      const LatLng(AppConstants.campusNELat, AppConstants.campusNELon),
-    );
-
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
@@ -106,7 +100,6 @@ class _MapScreenState extends State<MapScreen> {
         initialZoom: AppConstants.defaultZoom,
         minZoom: 15.5,
         maxZoom: 19,
-        cameraConstraint: CameraConstraint.contain(bounds: campusBounds),
         onTap: (_, __) {},
         onPositionChanged: (pos, hasGesture) {
           // If user manually drags the map, stop auto-follow
