@@ -13,7 +13,6 @@ import '../services/audio_coach_service.dart';
 import '../services/sync_service.dart';
 import '../widgets/run_stats_panel.dart';
 import '../utils/constants.dart';
-import '../utils/secrets.dart';
 import '../utils/formatters.dart';
 import '../models/run_model.dart';
 import '../models/poi.dart';
@@ -164,12 +163,12 @@ class _RunHubScreenState extends State<RunHubScreen>
       children: [
         TileLayer(
           urlTemplate: _useSatellite
-              ? 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/512/{z}/{x}/{y}?access_token=${Secrets.mapboxToken}'
-              : 'https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/512/{z}/{x}/{y}?access_token=${Secrets.mapboxToken}',
-          tileDimension: 512,
-          zoomOffset: -1,
+              ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+              : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+          subdomains: _useSatellite ? const [''] : const ['a', 'b', 'c', 'd'],
           userAgentPackageName: 'com.aerdr.rush',
-          maxZoom: 21,
+          maxZoom: 19,
+          retinaMode: !_useSatellite,
         ),
         // Campus boundary polygon — Universidad de Montemorelos (GeoJSON exacto)
         PolygonLayer(

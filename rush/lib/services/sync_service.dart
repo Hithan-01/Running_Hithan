@@ -15,16 +15,31 @@ class SyncService {
 
   /// Inicializa el documento de un usuario nuevo en Firestore (registro).
   /// Sobreescribe cualquier dato previo para ese UID.
-  Future<void> initNewUser(String uid, String name) async {
+  Future<void> initNewUser(String uid, String name, {String? faculty, int? semester}) async {
     try {
-      await _firestore.collection('users').doc(uid).set({
+      final data = <String, dynamic>{
         'name': name,
         'xp': 0,
         'totalDistance': 0.0,
         'totalRuns': 0,
-      });
+      };
+      if (faculty != null) data['faculty'] = faculty;
+      if (semester != null) data['semester'] = semester;
+      await _firestore.collection('users').doc(uid).set(data);
     } catch (e) {
       debugPrint('❌ Error inicializando usuario en Firestore: $e');
+    }
+  }
+
+  /// Actualiza el perfil del usuario (nombre, facultad, semestre) en Firestore.
+  Future<void> updateUserProfile(String uid, {required String name, String? faculty, int? semester}) async {
+    try {
+      final data = <String, dynamic>{'name': name};
+      if (faculty != null) data['faculty'] = faculty;
+      if (semester != null) data['semester'] = semester;
+      await _firestore.collection('users').doc(uid).set(data, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('❌ Error actualizando perfil en Firestore: $e');
     }
   }
 
@@ -128,23 +143,38 @@ class SyncService {
   }
 
   /// Fetch leaderboard entries.
-  /// [since] = null → all time; otherwise filters by startTime >= since
-  Future<List<Map<String, dynamic>>> fetchLeaderboard({DateTime? since}) async {
+  /// [since] = null → all time; otherwise filters by startTime >= since.
+  /// [faculty] / [semester] = scope filter (null = global).
+  Future<List<Map<String, dynamic>>> fetchLeaderboard({
+    DateTime? since,
+    String? faculty,
+    int? semester,
+  }) async {
     try {
       if (since == null) {
         // All time: query users collection
-        final snap = await _firestore
-            .collection('users')
-            .orderBy('xp', descending: true)
-            .limit(20)
-            .get();
-        return snap.docs
+        Query<Map<String, dynamic>> query = _firestore.collection('users');
+        if (faculty != null) {
+          query = query.where('faculty', isEqualTo: faculty);
+        } else if (semester != null) {
+          query = query.where('semester', isEqualTo: semester);
+        } else {
+          query = query.orderBy('xp', descending: true).limit(50);
+        }
+        final snap = await query.get();
+        final results = snap.docs
             .map((d) => {'id': d.id, ...d.data()})
             .where((d) {
               final name = d['name'] as String? ?? '';
               return name.isNotEmpty && name != 'Sin nombre';
             })
             .toList();
+        // Client-side sort when we didn't orderBy (faculty/semester queries)
+        if (faculty != null || semester != null) {
+          results.sort((a, b) => ((b['xp'] as num?)?.toInt() ?? 0)
+              .compareTo((a['xp'] as num?)?.toInt() ?? 0));
+        }
+        return results;
       } else {
         // Period: aggregate runs since the given date
         final snap = await _firestore
@@ -158,7 +188,7 @@ class SyncService {
           final uid = data['userId'] as String? ?? '';
           final name = data['userName'] as String? ?? '';
           final dist = (data['distanceKm'] as num?)?.toDouble() ?? 0;
-          if (uid.isEmpty) continue;
+          if (uid.isEmpty || name.isEmpty || name == 'Sin nombre') continue;
           if (!agg.containsKey(uid)) {
             agg[uid] = {'id': uid, 'name': name, 'totalDistance': 0.0, 'totalRuns': 0, 'xp': 0};
           }
@@ -166,16 +196,22 @@ class SyncService {
           agg[uid]!['totalRuns'] = (agg[uid]!['totalRuns'] as int) + 1;
           agg[uid]!['xp'] = (agg[uid]!['xp'] as int) + (dist * 100).round();
         }
-        // Fetch cosmetics from users collection for each unique user
+        // Fetch user docs: cosmetics + faculty/semester for filtering
         if (agg.isNotEmpty) {
           try {
             final uids = agg.keys.toList();
-            final userDocs = await _firestore
-                .collection('users')
-                .where(FieldPath.documentId, whereIn: uids.take(10).toList())
-                .get();
-            for (final doc in userDocs.docs) {
-              if (agg.containsKey(doc.id)) {
+            // Firestore whereIn limit is 30
+            final chunks = <List<String>>[];
+            for (int i = 0; i < uids.length; i += 30) {
+              chunks.add(uids.sublist(i, i + 30 > uids.length ? uids.length : i + 30));
+            }
+            for (final chunk in chunks) {
+              final userDocs = await _firestore
+                  .collection('users')
+                  .where(FieldPath.documentId, whereIn: chunk)
+                  .get();
+              for (final doc in userDocs.docs) {
+                if (!agg.containsKey(doc.id)) continue;
                 final d = doc.data();
                 if (d['equippedAvatarColorId'] != null) {
                   agg[doc.id]!['equippedAvatarColorId'] = d['equippedAvatarColorId'];
@@ -183,17 +219,69 @@ class SyncService {
                 if (d['equippedAvatarFrameId'] != null) {
                   agg[doc.id]!['equippedAvatarFrameId'] = d['equippedAvatarFrameId'];
                 }
+                if (d['faculty'] != null) agg[doc.id]!['faculty'] = d['faculty'];
+                if (d['semester'] != null) agg[doc.id]!['semester'] = d['semester'];
               }
             }
           } catch (_) {}
         }
-        final result = agg.values.toList()
+        // Apply faculty/semester filter
+        Iterable<Map<String, dynamic>> filtered = agg.values;
+        if (faculty != null) {
+          filtered = filtered.where((e) => e['faculty'] == faculty);
+        } else if (semester != null) {
+          filtered = filtered.where((e) => e['semester'] == semester);
+        }
+        final result = filtered.toList()
           ..sort((a, b) => (b['xp'] as int).compareTo(a['xp'] as int));
         return result;
       }
     } catch (e) {
       debugPrint('❌ Error fetching leaderboard: $e');
       return [];
+    }
+  }
+
+  /// Guarda el progreso completo del usuario en Firestore (merge).
+  /// Llamar después de correr, comprar, equipar o desbloquear logros.
+  Future<void> syncUserProgress(
+    String uid, {
+    required int xp,
+    required int level,
+    required double totalDistanceKm,
+    required int totalRuns,
+    required int totalTimeSeconds,
+    required int currentStreak,
+    required int bestStreak,
+    required int coins,
+    required List<String> purchasedItemIds,
+    String? equippedTitleId,
+    String? equippedAvatarColorId,
+    String? equippedAvatarFrameId,
+    String? equippedRouteColorId,
+    required List<String> unlockedAchievementIds,
+    required List<String> visitedPoiIds,
+  }) async {
+    try {
+      await _firestore.collection('users').doc(uid).set({
+        'xp': xp,
+        'level': level,
+        'totalDistance': totalDistanceKm,
+        'totalRuns': totalRuns,
+        'totalTime': totalTimeSeconds,
+        'currentStreak': currentStreak,
+        'bestStreak': bestStreak,
+        'coins': coins,
+        'purchasedItemIds': purchasedItemIds,
+        'equippedTitleId': ?equippedTitleId,
+        'equippedAvatarColorId': ?equippedAvatarColorId,
+        'equippedAvatarFrameId': ?equippedAvatarFrameId,
+        'equippedRouteColorId': ?equippedRouteColorId,
+        'unlockedAchievementIds': unlockedAchievementIds,
+        'visitedPoiIds': visitedPoiIds,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('❌ Error sincronizando progreso: $e');
     }
   }
 

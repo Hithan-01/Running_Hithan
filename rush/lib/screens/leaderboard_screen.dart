@@ -7,6 +7,7 @@ import '../utils/constants.dart';
 import '../utils/formatters.dart';
 
 enum _Period { today, week, month, allTime }
+enum _Scope { global, faculty, semester }
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -17,8 +18,11 @@ class LeaderboardScreen extends StatefulWidget {
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   _Period _selected = _Period.week;
+  _Scope _scope = _Scope.global;
   late Future<List<LeaderboardEntry>> _leaderboardFuture;
   String? _currentUserId;
+  String? _userFaculty;
+  int? _userSemester;
 
   static const _labels = {
     _Period.today: 'Hoy',
@@ -42,8 +46,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   void _loadLeaderboard() {
     final since = _getPeriodStart();
+    final faculty = _scope == _Scope.faculty ? _userFaculty : null;
+    final semester = _scope == _Scope.semester ? _userSemester : null;
     _leaderboardFuture = SyncService()
-        .fetchLeaderboard(since: since)
+        .fetchLeaderboard(since: since, faculty: faculty, semester: semester)
         .then((data) => _mapEntries(data));
   }
 
@@ -114,8 +120,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           );
         }
 
-        // Keep current user ID in sync for entry marking
+        // Keep current user data in sync
         _currentUserId = user.id;
+        _userFaculty = user.faculty;
+        _userSemester = user.semester;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -175,8 +183,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       ),
                     ),
                     bottom: PreferredSize(
-                      preferredSize: const Size.fromHeight(56),
-                      child: _buildFilterChips(),
+                      preferredSize: Size.fromHeight(
+                        56 + (_userFaculty != null || _userSemester != null ? 48 : 0),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildFilterChips(),
+                          if (_userFaculty != null || _userSemester != null)
+                            _buildScopeChips(user),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -316,6 +333,59 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildScopeChips(dynamic user) {
+    final hasFaculty = _userFaculty != null;
+    final hasSemester = _userSemester != null;
+
+    final scopes = <_Scope, String>{
+      _Scope.global: 'Global',
+      if (hasFaculty) _Scope.faculty: 'Mi Facultad',
+      if (hasSemester) _Scope.semester: 'Semestre $_userSemester',
+    };
+
+    return Container(
+      color: AppColors.background,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Row(
+        children: scopes.entries.map((entry) {
+          final isSelected = _scope == entry.key;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => setState(() {
+                _scope = entry.key;
+                _loadLeaderboard();
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.secondary.withAlpha(220)
+                      : AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.secondary
+                        : AppColors.textMuted.withAlpha(50),
+                  ),
+                ),
+                child: Text(
+                  entry.value,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : AppColors.textMuted,
+                  ),
                 ),
               ),
             ),

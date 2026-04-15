@@ -144,18 +144,93 @@ class GamificationService extends ChangeNotifier {
     int? semester,
   }) async {
     _user = DatabaseService.getUser(uid);
-    if (_user == null) {
-      _user = await DatabaseService.createUser(
-        id: uid,
-        name: name,
-        faculty: faculty,
-        semester: semester,
-      );
-      // Reset Firestore document so old test data doesn't carry over
-      await SyncService().initNewUser(uid, name);
-      // Assign initial daily missions
-      await assignDailyMissions();
+
+    // Local looks empty → try to restore from Firestore
+    // (covers: first login, wiped device, or local data corrupted to 0)
+    final localEmpty = _user == null || (_user!.xp == 0 && _user!.totalRuns == 0);
+
+    if (localEmpty) {
+      final remote = await SyncService().getUserStats(uid);
+      final remoteXp = (remote?['xp'] as num?)?.toInt() ?? 0;
+
+      if (remote != null && remoteXp > 0) {
+        // Restore from Firestore
+        final distKm    = (remote['totalDistance'] as num?)?.toDouble() ?? 0.0;
+        final runs      = (remote['totalRuns'] as num?)?.toInt() ?? 0;
+        final rName     = remote['name'] as String? ?? name;
+        final rFac      = remote['faculty'] as String? ?? faculty;
+        final rSem      = (remote['semester'] as num?)?.toInt() ?? semester;
+        final rTime     = (remote['totalTime'] as num?)?.toInt() ?? 0;
+        final rStreak   = (remote['currentStreak'] as num?)?.toInt() ?? 0;
+        final rBest     = (remote['bestStreak'] as num?)?.toInt() ?? 0;
+        final rCoins    = (remote['coins'] as num?)?.toInt() ?? 0;
+        final rPurchased = (remote['purchasedItemIds'] as List?)
+            ?.map((e) => e.toString()).toList() ?? [];
+        final rTitle    = remote['equippedTitleId'] as String?;
+        final rAvatarColor = remote['equippedAvatarColorId'] as String?;
+        final rAvatarFrame = remote['equippedAvatarFrameId'] as String?;
+        final rRouteColor  = remote['equippedRouteColorId'] as String?;
+        final rAchievements = (remote['unlockedAchievementIds'] as List?)
+            ?.map((e) => e.toString()).toList() ?? [];
+        final rPois = (remote['visitedPoiIds'] as List?)
+            ?.map((e) => e.toString()).toList() ?? [];
+
+        if (_user == null) {
+          _user = await DatabaseService.createUser(
+            id: uid, name: rName, faculty: rFac, semester: rSem,
+          );
+        } else {
+          _user!.name     = rName;
+          _user!.faculty  = rFac;
+          _user!.semester = rSem;
+        }
+
+        _user!.xp            = remoteXp;
+        _user!.totalDistance = (distKm * 1000).round();
+        _user!.totalRuns     = runs;
+        _user!.totalTime     = rTime;
+        _user!.currentStreak = rStreak;
+        _user!.bestStreak    = rBest;
+        _user!.coins         = rCoins;
+        _user!.purchasedItemIds   = rPurchased;
+        _user!.equippedTitleId    = rTitle;
+        _user!.equippedAvatarColorId = rAvatarColor;
+        _user!.equippedAvatarFrameId = rAvatarFrame;
+        _user!.equippedRouteColorId  = rRouteColor;
+
+        // Recalculate level from restored XP
+        _user!.level = 1;
+        for (int i = 1; i < User.levelThresholds.length; i++) {
+          if (remoteXp >= User.levelThresholds[i]) {
+            _user!.level = i + 1;
+          } else {
+            break;
+          }
+        }
+        await DatabaseService.updateUser(_user!);
+
+        // Restore achievements to Hive
+        for (final id in rAchievements) {
+          await DatabaseService.unlockAchievement(uid, id);
+        }
+        // Restore visited POIs to Hive
+        for (final id in rPois) {
+          await DatabaseService.visitPoi(uid, id);
+        }
+
+        debugPrint('✅ Restaurado: $remoteXp XP, ${distKm.toStringAsFixed(1)} km, '
+            '${rAchievements.length} logros, ${rPois.length} POIs');
+        await assignDailyMissions();
+      } else if (_user == null) {
+        // Truly new account — initialize in Firestore
+        _user = await DatabaseService.createUser(
+          id: uid, name: name, faculty: faculty, semester: semester,
+        );
+        await SyncService().initNewUser(uid, name, faculty: faculty, semester: semester);
+        await assignDailyMissions();
+      }
     }
+
     _loadUserData();
     notifyListeners();
     return _user!;
@@ -254,6 +329,11 @@ class GamificationService extends ChangeNotifier {
     _user!.semester = semester;
     await DatabaseService.updateUser(_user!);
     notifyListeners();
+    // Sync to Firestore
+    final uid = auth.FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await SyncService().updateUserProfile(uid, name: name, faculty: faculty, semester: semester);
+    }
   }
 
   // Update profile photo path
@@ -355,6 +435,7 @@ class GamificationService extends ChangeNotifier {
       );
     }
 
+    _syncProgress();
     notifyListeners();
     return result;
   }
@@ -641,7 +722,7 @@ class GamificationService extends ChangeNotifier {
     _equipItem(item);
 
     await DatabaseService.updateUser(_user!);
-    _pushCosmeticsToFirestore();
+    _syncProgress();
     notifyListeners();
     return item;
   }
@@ -651,7 +732,7 @@ class GamificationService extends ChangeNotifier {
     if (!_user!.hasItem(item.id)) return;
     _equipItem(item);
     await DatabaseService.updateUser(_user!);
-    _pushCosmeticsToFirestore();
+    _syncProgress();
     notifyListeners();
   }
 
@@ -666,14 +747,27 @@ class GamificationService extends ChangeNotifier {
     }
   }
 
-  void _pushCosmeticsToFirestore() {
+/// Sube el progreso completo a Firestore (coins, logros, POIs, etc.)
+  void _syncProgress() {
     final firebaseUser = auth.FirebaseAuth.instance.currentUser;
     if (firebaseUser == null || _user == null) return;
-    SyncService().updateUserCosmetics(
+    SyncService().syncUserProgress(
       firebaseUser.uid,
-      avatarColorId: _user!.equippedAvatarColorId,
-      avatarFrameId: _user!.equippedAvatarFrameId,
-      routeColorId: _user!.equippedRouteColorId,
+      xp: _user!.xp,
+      level: _user!.level,
+      totalDistanceKm: _user!.totalDistance / 1000.0,
+      totalRuns: _user!.totalRuns,
+      totalTimeSeconds: _user!.totalTime,
+      currentStreak: _user!.currentStreak,
+      bestStreak: _user!.bestStreak,
+      coins: _user!.coins,
+      purchasedItemIds: _user!.purchasedItemIds,
+      equippedTitleId: _user!.equippedTitleId,
+      equippedAvatarColorId: _user!.equippedAvatarColorId,
+      equippedAvatarFrameId: _user!.equippedAvatarFrameId,
+      equippedRouteColorId: _user!.equippedRouteColorId,
+      unlockedAchievementIds: _unlockedAchievementIds,
+      visitedPoiIds: _visitedPoiIds,
     );
   }
 
@@ -702,6 +796,7 @@ class GamificationService extends ChangeNotifier {
     if (_user == null) return;
     _user!.equippedTitleId = titleId;
     await DatabaseService.updateUser(_user!);
+    _syncProgress();
     notifyListeners();
   }
 
