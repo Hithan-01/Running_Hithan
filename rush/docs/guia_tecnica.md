@@ -143,6 +143,48 @@ service cloud.firestore {
 }
 ```
 
+### Estructura de colecciones en Firestore
+
+#### `users/{uid}`
+
+```
+users/
+  {uid}/                         ← UID de Firebase Auth
+    name:                String   ← Nombre del usuario
+    faculty:             String?  ← Facultad (para leaderboard por facultad)
+    semester:            int?     ← Semestre (para leaderboard por semestre)
+    xp:                  int      ← Puntos de experiencia acumulados
+    level:               int      ← Nivel actual (1–6)
+    totalDistance:       int      ← Distancia total en metros
+    totalRuns:           int      ← Número de carreras completadas
+    totalTime:           int      ← Tiempo total en segundos
+    currentStreak:       int      ← Racha de días consecutivos
+    bestStreak:          int      ← Mejor racha histórica
+    coins:               int      ← Monedas actuales
+    purchasedItemIds:    [String] ← IDs de cosméticos comprados
+    equippedTitleId:     String?  ← ID del título equipado
+    equippedAvatarColorId:  String? ← Color de avatar equipado
+    equippedAvatarFrameId:  String? ← Marco de avatar equipado
+    equippedRouteColorId:   String? ← Color de ruta equipado
+    unlockedAchievementIds: [String] ← IDs de logros desbloqueados
+    visitedPoiIds:       [String] ← IDs de POIs visitados
+```
+
+#### `runs/{runId}`
+
+```
+runs/
+  {runId}/                       ← UUID generado por la app
+    userId:       String         ← UID del usuario dueño de la carrera
+    userName:     String         ← Nombre (para mostrar en leaderboard)
+    distanceKm:   double         ← Distancia en kilómetros
+    durationSeconds: int         ← Duración en segundos
+    startTime:    Timestamp      ← Inicio de la carrera
+    endTime:      Timestamp      ← Fin de la carrera
+```
+
+> **Nota:** La ruta GPS (`routePoints`) se guarda solo en Hive local para no exceder el límite de 1MB por documento de Firestore.
+
 ---
 
 ## 4. Permisos requeridos
